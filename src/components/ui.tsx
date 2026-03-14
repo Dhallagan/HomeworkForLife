@@ -1,4 +1,4 @@
-import { PropsWithChildren } from "react";
+import { PropsWithChildren, type ReactNode } from "react";
 import {
   Pressable,
   ScrollView,
@@ -10,7 +10,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { colors, spacing } from "../theme";
+import {
+  colors,
+  layout,
+  radii,
+  spacing,
+  statusColors,
+} from "../theme";
 
 export function Screen({
   children,
@@ -41,7 +47,55 @@ export function Card({
   children,
   style,
 }: PropsWithChildren<{ style?: ViewStyle }>) {
-  return <View style={[styles.card, style]}>{children}</View>;
+  return <Panel style={style}>{children}</Panel>;
+}
+
+export function Panel({
+  children,
+  style,
+  tone = "default",
+}: PropsWithChildren<{
+  style?: ViewStyle;
+  tone?: "default" | "soft";
+}>) {
+  return (
+    <View
+      style={[
+        styles.panel,
+        tone === "soft" && styles.panelSoft,
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
+export function ScreenHeader({
+  eyebrow,
+  title,
+  description,
+  trailing,
+}: {
+  eyebrow?: ReactNode;
+  title: ReactNode;
+  description?: ReactNode;
+  trailing?: ReactNode;
+}) {
+  return (
+    <View style={styles.screenHeaderRow}>
+      <View style={styles.screenHeader}>
+        {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
+        <Text style={styles.screenTitle}>{title}</Text>
+        {description ? <Text style={styles.screenDescription}>{description}</Text> : null}
+      </View>
+      {trailing ? <View style={styles.screenHeaderAside}>{trailing}</View> : null}
+    </View>
+  );
+}
+
+export function SectionLabel({ children }: PropsWithChildren) {
+  return <Text style={styles.sectionLabel}>{children}</Text>;
 }
 
 export function SectionTitle({ children }: PropsWithChildren) {
@@ -110,44 +164,91 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    gap: spacing.md,
+    paddingHorizontal: layout.screenPadding,
+    paddingVertical: layout.screenTop,
+    gap: layout.sectionGap,
   },
   scrollContent: {
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    gap: spacing.md,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: layout.screenTop,
+    paddingBottom: spacing.xxl,
+    gap: layout.sectionGap,
   },
-  card: {
+  panel: {
     backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: spacing.md,
+    borderRadius: radii.lg,
+    padding: layout.panelPadding,
+    gap: layout.panelGap,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     shadowColor: colors.shadow,
     shadowOpacity: 1,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  panelSoft: {
+    backgroundColor: colors.accentSoft,
+    borderColor: "#D3CDC1",
+  },
+  screenHeaderRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: spacing.md,
+  },
+  screenHeader: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  screenHeaderAside: {
+    paddingTop: spacing.xs,
+  },
+  eyebrow: {
+    color: colors.muted,
+    fontSize: 11,
+    letterSpacing: 1,
+    fontFamily: "Courier",
+    textTransform: "uppercase",
+  },
+  screenTitle: {
+    fontSize: 30,
+    lineHeight: 36,
+    color: colors.text,
+    fontWeight: "300",
+    letterSpacing: -1.1,
+  },
+  screenDescription: {
+    color: colors.muted,
+    fontSize: 15,
+    lineHeight: 22,
+    maxWidth: 540,
+  },
+  sectionLabel: {
+    color: colors.muted,
+    fontSize: 11,
+    letterSpacing: 1,
+    fontFamily: "Courier",
+    textTransform: "uppercase",
+    marginBottom: -4,
   },
   sectionTitle: {
     fontSize: 28,
     lineHeight: 34,
     color: colors.text,
-    fontWeight: "700",
-    letterSpacing: -0.5,
+    fontWeight: "300",
+    letterSpacing: -0.7,
   },
   primaryButton: {
     minHeight: 48,
-    borderRadius: 16,
+    borderRadius: radii.md,
     backgroundColor: colors.accent,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: spacing.lg,
   },
   secondaryButton: {
-    minHeight: 42,
-    borderRadius: 14,
+    minHeight: 44,
+    borderRadius: radii.md,
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -159,7 +260,7 @@ const styles = StyleSheet.create({
     color: "#FFF8F2",
     fontWeight: "700",
     fontSize: 15,
-    letterSpacing: -0.2,
+    letterSpacing: 0.1,
   },
   secondaryButtonText: {
     color: colors.text,
@@ -172,20 +273,20 @@ const styles = StyleSheet.create({
   },
   pill: {
     alignSelf: "flex-start",
-    borderRadius: 999,
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
+    borderRadius: radii.pill,
+    backgroundColor: statusColors.default.background,
+    borderColor: statusColors.default.border,
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
   pillSuccess: {
-    backgroundColor: "#E9F4EA",
-    borderColor: "#B8D0BE",
+    backgroundColor: statusColors.success.background,
+    borderColor: statusColors.success.border,
   },
   pillDanger: {
-    backgroundColor: "#FCEBE6",
-    borderColor: "#E3B8AB",
+    backgroundColor: statusColors.danger.background,
+    borderColor: statusColors.danger.border,
   },
   pillText: {
     color: colors.muted,
