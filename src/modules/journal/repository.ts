@@ -192,6 +192,26 @@ export async function updateEntry(
   );
 }
 
+export async function deleteEntry(db: SQLiteDatabase, id: string) {
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `
+        DELETE FROM walk_sessions
+        WHERE entry_id = ?
+      `,
+      id,
+    );
+
+    await db.runAsync(
+      `
+        DELETE FROM journal_entries
+        WHERE id = ?
+      `,
+      id,
+    );
+  });
+}
+
 export async function upsertDailySteps(
   db: SQLiteDatabase,
   dailySteps: DailySteps,

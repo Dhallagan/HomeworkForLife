@@ -1,18 +1,24 @@
-import { useCallback, useMemo, useState } from "react";
-import { Pressable, SectionList, StyleSheet, Text, View } from "react-native";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { Alert, Pressable, SectionList, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
+  EntrySwipeRow,
+  type EntrySwipeRowHandle,
+} from "../src/components/entry-swipe-row";
+import {
   PaperRecordButton,
   PaperRow,
 } from "../src/components/notebook";
 import {
-  formatEntryTime,
   formatLongDay,
 } from "../src/lib/date";
-import { listEntries } from "../src/modules/journal/repository";
+import {
+  deleteEntry,
+  listEntries,
+} from "../src/modules/journal/repository";
 import type { EntryListItem } from "../src/modules/journal/types";
 import { colors } from "../src/theme";
 
@@ -27,6 +33,7 @@ export default function HomeScreen() {
   const db = useSQLiteContext();
   const router = useRouter();
   const [entries, setEntries] = useState<EntryListItem[]>([]);
+  const openSwipeableRef = useRef<EntrySwipeRowHandle | null>(null);
 
   const loadEntries = useCallback(async () => {
     const nextEntries = await listEntries(db);
@@ -36,7 +43,40 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       void loadEntries();
+
+      return () => {
+        openSwipeableRef.current?.close();
+        openSwipeableRef.current = null;
+      };
     }, [loadEntries]),
+  );
+
+  const handleRowOpen = useCallback((nextSwipeable: EntrySwipeRowHandle) => {
+    if (openSwipeableRef.current && openSwipeableRef.current !== nextSwipeable) {
+      openSwipeableRef.current.close();
+    }
+
+    openSwipeableRef.current = nextSwipeable;
+  }, []);
+
+  const handleDelete = useCallback(
+    async (entryId: string) => {
+      openSwipeableRef.current?.close();
+      openSwipeableRef.current = null;
+
+      setEntries((currentEntries) =>
+        currentEntries.filter((entry) => entry.id !== entryId),
+      );
+
+      try {
+        await deleteEntry(db, entryId);
+      } catch (error) {
+        console.error("Failed to delete entry", error);
+        Alert.alert("Couldn't delete entry", "Please try again.");
+        await loadEntries();
+      }
+    },
+    [db, loadEntries],
   );
 
   const sections = useMemo(() => groupEntriesByDay(entries), [entries]);
@@ -70,14 +110,12 @@ export default function HomeScreen() {
               </Text>
             )}
             renderItem={({ item }) => (
-              <Pressable onPress={() => router.push(`/entry/${item.id}`)}>
-                <PaperRow>
-                  <Text numberOfLines={2} style={styles.entryPreview}>
-                    {item.body || "Empty entry"}
-                  </Text>
-                  <Text style={styles.entryMeta}>{formatEntryTime(item.createdAt)}</Text>
-                </PaperRow>
-              </Pressable>
+              <EntrySwipeRow
+                entry={item}
+                onOpen={handleRowOpen}
+                onDelete={() => void handleDelete(item.id)}
+                onPress={() => router.push(`/entry/${item.id}`)}
+              />
             )}
             SectionSeparatorComponent={() => <View style={styles.sectionGap} />}
           />
@@ -160,19 +198,6 @@ const styles = StyleSheet.create({
     fontFamily: "Courier",
     paddingHorizontal: 18,
     paddingBottom: 4,
-  },
-  entryPreview: {
-    color: colors.text,
-    fontSize: 17,
-    lineHeight: 24,
-    paddingRight: 18,
-  },
-  entryMeta: {
-    color: colors.muted,
-    fontSize: 11,
-    letterSpacing: 0.8,
-    fontFamily: "Courier",
-    marginTop: 6,
   },
   sectionGap: {
     height: 12,
