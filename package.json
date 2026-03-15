@@ -7,7 +7,10 @@
     "android": "expo run:android",
     "ios": "RCT_BUILD_HERMES_FROM_SOURCE=true expo run:ios",
     "prebuild": "expo prebuild --clean",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "doctor": "npx expo-doctor",
+    "ci:check": "npm run typecheck && npm run doctor"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",

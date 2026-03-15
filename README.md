@@ -1,7 +1,7 @@
 # WalkLog
 
-WalkLog is a weekend iPhone prototype built with Expo React Native. The product
-scope is intentionally narrow:
+WalkLog is an Expo Router iPhone app for spoken walking journals. The current
+product scope is intentionally narrow:
 
 - Start a walk
 - Talk freely
@@ -16,14 +16,41 @@ not a production-safe secret model.
 
 ## Run locally
 
-1. Install dependencies with `npm install`
-2. Generate native projects with `npm run prebuild`
-3. Run on iPhone or simulator with `npm run ios`
-4. Set `EXPO_PUBLIC_OPENAI_API_KEY` before running on a real device
-5. If you want Fitbit steps, set `EXPO_PUBLIC_FITBIT_CLIENT_ID` and register `walklog://fitbit` as the redirect URI in the Fitbit developer app
+1. Use Node `20.19.4` or newer within the Node 20 line. `.nvmrc` is included for this.
+2. Install dependencies with `npm install`
+3. Copy `.env.example` to `.env.local` and fill in required values
+4. Run `npm run typecheck`
+5. Run `npm run doctor`
+6. Generate native projects with `npm run prebuild`
+7. Run on iPhone or simulator with `npm run ios`
+8. Set `EXPO_PUBLIC_OPENAI_API_KEY` before running on a real device
+9. If you want Fitbit steps, set `EXPO_PUBLIC_FITBIT_CLIENT_ID` and register `walklog://fitbit` as the redirect URI in the Fitbit developer app
 
-This project is pinned to Expo SDK 51 because the current machine is running
-Node `20.6.1`. Newer Expo SDKs now require a newer Node 20 release.
+## Cloud agent groundwork
+
+This repo now includes a few basics for remote agent and review workflows:
+
+- `AGENTS.md` defines setup, validation, and guardrails for coding agents
+- `.github/workflows/ci.yml` runs typecheck and Expo doctor on pushes and PRs
+- `eas.json` includes `development`, `preview`, and `production` build profiles
+
+Useful commands:
+
+- `npm run ci:check`
+- `eas build --platform ios --profile preview`
+- `eas build --platform ios --profile production`
+
+Recommended review loop:
+
+1. Push a branch
+2. Let CI pass
+3. Trigger an EAS preview build for iPhone testing
+4. Review the diff and build from your phone
+5. Merge after device validation
+
+Expo SDK 54 lists Node `20.19.x` as the minimum supported version, and the
+current EAS SDK 54 images use Node `20.19.4`. Local `expo-doctor` will fail on
+older Node 20 releases such as `20.6.1`. Sources: [Expo SDK 54 reference](https://docs.expo.dev/versions/v54.0.0/), [EAS build infrastructure](https://docs.expo.dev/build-reference/infrastructure/).
 
 ## Weekend validation
 
