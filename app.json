@@ -18,6 +18,7 @@
       "bundleIdentifier": "com.dylan.walklog",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "WalkLog uses the microphone to record your spoken journal entries during a walk.",
+        "NSHealthUpdateUsageDescription": "HomeworkForLife saves step-related journal data to Apple Health when needed to support your walk entries.",
         "UIBackgroundModes": [
           "audio",
           "audio"
@@ -49,7 +50,7 @@
         {
           "background": false,
           "NSHealthShareUsageDescription": "WalkLog reads your step count from Apple Health so each walk entry includes steps.",
-          "NSHealthUpdateUsageDescription": false
+          "NSHealthUpdateUsageDescription": "HomeworkForLife saves step-related journal data to Apple Health when needed to support your walk entries."
         }
       ],
       "expo-secure-store"
