@@ -32,6 +32,7 @@ This repo now includes a few basics for remote agent and review workflows:
 
 - `AGENTS.md` defines setup, validation, and guardrails for coding agents
 - `.github/workflows/ci.yml` runs typecheck and Expo doctor on pushes and PRs
+- `.github/workflows/eas-preview.yml` can trigger EAS preview builds from GitHub
 - `eas.json` includes `development`, `preview`, and `production` build profiles
 
 Useful commands:
@@ -47,6 +48,18 @@ Recommended review loop:
 3. Trigger an EAS preview build for iPhone testing
 4. Review the diff and build from your phone
 5. Merge after device validation
+
+## GitHub-triggered preview builds
+
+To let GitHub Actions trigger EAS builds, add an `EXPO_TOKEN` repository secret.
+Create it from the Expo access token page and store it in GitHub Actions secrets.
+
+Once that secret exists, you have two trigger paths:
+
+1. Run the `EAS Preview` workflow manually from the GitHub Actions tab
+2. Add the `eas-build-ios:preview` label to a PR targeting `main`
+
+The PR-label path is the simplest one to use from a phone.
 
 Expo SDK 54 lists Node `20.19.x` as the minimum supported version, and the
 current EAS SDK 54 images use Node `20.19.4`. Local `expo-doctor` will fail on

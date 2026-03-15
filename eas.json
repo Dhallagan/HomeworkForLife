@@ -6,13 +6,17 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "channel": "development"
+      "channel": "development",
+      "ios": {
+        "image": "latest"
+      }
     },
     "preview": {
       "distribution": "internal",
       "channel": "preview",
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "image": "latest"
       }
     },
     "production": {
@@ -20,7 +24,8 @@
       "channel": "production",
       "distribution": "store",
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "image": "latest"
       }
     }
   },

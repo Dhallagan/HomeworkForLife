@@ -1,0 +1,110 @@
+name: EAS Preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        required: true
+        default: ios
+        type: choice
+        options:
+          - ios
+          - android
+          - all
+      profile:
+        description: EAS build profile
+        required: true
+        default: preview
+        type: choice
+        options:
+          - preview
+          - development
+          - production
+  pull_request:
+    branches:
+      - main
+    types:
+      - labeled
+
+jobs:
+  build-preview:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.label.name == 'eas-build-ios:preview'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    concurrency:
+      group: eas-preview-${{ github.event.pull_request.number || github.ref_name }}
+      cancel-in-progress: false
+    steps:
+      - name: Ensure Expo token exists
+        run: |
+          if [ -z "${EXPO_TOKEN}" ]; then
+            echo "Missing EXPO_TOKEN GitHub Actions secret."
+            echo "Create one at expo.dev/settings/access-tokens and add it in this repo's Actions secrets."
+            exit 1
+          fi
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.4
+          cache: npm
+
+      - name: Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Select build parameters
+        id: params
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            echo "platform=${{ inputs.platform }}" >> "$GITHUB_OUTPUT"
+            echo "profile=${{ inputs.profile }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "platform=ios" >> "$GITHUB_OUTPUT"
+            echo "profile=preview" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Trigger EAS build
+        run: |
+          eas build \
+            --platform "${{ steps.params.outputs.platform }}" \
+            --profile "${{ steps.params.outputs.profile }}" \
+            --non-interactive \
+            --no-wait
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              "Preview build triggered on EAS.",
+              `Platform: ios`,
+              `Profile: preview`,
+              `GitHub Actions run: ${runUrl}`,
+              "Open the run logs or the Expo builds dashboard to follow progress."
+            ].join("\n");
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body
+            });
