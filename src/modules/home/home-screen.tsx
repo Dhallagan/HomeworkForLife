@@ -38,14 +38,36 @@ type EntrySection = {
   data: EntryListItem[];
 };
 
+type HomeScreenMemoryState = {
+  entries: EntryListItem[];
+  todaySteps: number | null;
+  stepPermission: StepPermissionStatus;
+  stepSource: StepSource;
+  hasLoadedOnce: boolean;
+};
+
+const initialMemoryState: HomeScreenMemoryState = {
+  entries: [],
+  todaySteps: null,
+  stepPermission: "undetermined",
+  stepSource: "apple-health",
+  hasLoadedOnce: false,
+};
+
+let homeScreenMemoryState: HomeScreenMemoryState = initialMemoryState;
+
 export default function HomeScreen() {
   const db = useSQLiteContext();
   const router = useRouter();
-  const [entries, setEntries] = useState<EntryListItem[]>([]);
-  const [todaySteps, setTodaySteps] = useState<number | null>(null);
-  const [stepPermission, setStepPermission] =
-    useState<StepPermissionStatus>("undetermined");
-  const [stepSource, setStepSource] = useState<StepSource>("apple-health");
+  const [entries, setEntries] = useState<EntryListItem[]>(homeScreenMemoryState.entries);
+  const [todaySteps, setTodaySteps] = useState<number | null>(
+    homeScreenMemoryState.todaySteps,
+  );
+  const [stepPermission, setStepPermission] = useState<StepPermissionStatus>(
+    homeScreenMemoryState.stepPermission,
+  );
+  const [stepSource, setStepSource] = useState<StepSource>(homeScreenMemoryState.stepSource);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(homeScreenMemoryState.hasLoadedOnce);
   const openSwipeableRef = useRef<EntrySwipeRowHandle | null>(null);
 
   const loadHome = useCallback(async () => {
@@ -59,7 +81,16 @@ export default function HomeScreen() {
       setTodaySteps(stepSnapshot.totalSteps);
       setStepPermission(stepSnapshot.permission);
       setStepSource(stepSnapshot.source);
+      setHasLoadedOnce(true);
     });
+
+    homeScreenMemoryState = {
+      entries: nextEntries,
+      todaySteps: stepSnapshot.totalSteps,
+      stepPermission: stepSnapshot.permission,
+      stepSource: stepSnapshot.source,
+      hasLoadedOnce: true,
+    };
 
     if (stepSnapshot.permission === "granted") {
       void upsertDailySteps(db, makeDailyStepsRecord(stepSnapshot.totalSteps));
@@ -167,7 +198,13 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        {sections.length === 0 ? (
+        {!hasLoadedOnce ? (
+          <View style={styles.listWrap}>
+            <PaperRow>
+              <Text style={styles.emptyText}>Loading your notebook...</Text>
+            </PaperRow>
+          </View>
+        ) : sections.length === 0 ? (
           <View style={styles.listWrap}>
             <PaperRow>
               <Text style={styles.emptyText}>No entry yet.</Text>
