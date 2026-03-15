@@ -40,6 +40,9 @@ This repo is set up for small, reviewable feature slices that can be delegated t
 5. Add `eas-build-ios:preview` if you need an installable build
 6. Review CI, build status, and PR comments from your phone
 
+For rough phone-written prompts, this repo includes the skill `.agents/skills/refine-quick-agent-prompts/`.
+Use it when you want Codex to tighten a vague request like "improve this screen" into a bounded task before implementation.
+
 ## PR expectations
 
 Every PR should include:

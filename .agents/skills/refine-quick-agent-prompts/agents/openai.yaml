@@ -1,0 +1,4 @@
+interface:
+  display_name: "Refine Quick Agent Prompts"
+  short_description: "Turn short chats into agent tasks."
+  default_prompt: "Rewrite a short request into a small blast-radius Codex task with constraints and a clear done state."
