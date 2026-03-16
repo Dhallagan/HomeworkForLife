@@ -21,6 +21,8 @@ export type StepSnapshot = {
   totalSteps: number;
   source: StepSource;
   sourceLabel: string;
+  syncStatus: "idle" | "ok" | "error";
+  syncMessage?: string;
 };
 
 export { makeDailyStepsRecord };
@@ -144,19 +146,31 @@ export async function getWindowStepSnapshot(
       totalSteps: 0,
       source,
       sourceLabel: getStepSourceLabel(source),
+      syncStatus: "idle",
     };
   }
 
-  const totalSteps =
-    source === "apple-health"
-      ? await getHealthStepCountForWindow(startedAt, endedAt)
-      : await getFitbitStepsForWindow(startedAt, endedAt);
+  if (source === "apple-health") {
+    const totalSteps = await getHealthStepCountForWindow(startedAt, endedAt);
+
+    return {
+      permission,
+      totalSteps,
+      source,
+      sourceLabel: getStepSourceLabel(source),
+      syncStatus: "ok",
+    };
+  }
+
+  const fitbitResult = await getFitbitStepsForWindow(startedAt, endedAt);
 
   return {
     permission,
-    totalSteps,
+    totalSteps: fitbitResult.totalSteps,
     source,
     sourceLabel: getStepSourceLabel(source),
+    syncStatus: fitbitResult.syncStatus,
+    syncMessage: fitbitResult.syncMessage,
   };
 }
 
@@ -183,19 +197,31 @@ export async function getStepSourceSnapshot(
       totalSteps: 0,
       source,
       sourceLabel: getStepSourceLabel(source),
+      syncStatus: "idle",
     };
   }
 
-  const totalSteps =
-    source === "apple-health"
-      ? await getTodayHealthStepCount()
-      : await getTodayFitbitSteps();
+  if (source === "apple-health") {
+    const totalSteps = await getTodayHealthStepCount();
+
+    return {
+      permission,
+      totalSteps,
+      source,
+      sourceLabel: getStepSourceLabel(source),
+      syncStatus: "ok",
+    };
+  }
+
+  const fitbitResult = await getTodayFitbitSteps();
 
   return {
     permission,
-    totalSteps,
+    totalSteps: fitbitResult.totalSteps,
     source,
     sourceLabel: getStepSourceLabel(source),
+    syncStatus: fitbitResult.syncStatus,
+    syncMessage: fitbitResult.syncMessage,
   };
 }
 
@@ -226,8 +252,16 @@ async function loadFitbitModule() {
       connectFitbit: async () => false,
       disconnectFitbit: async () => {},
       getFitbitPermissionStatus: async () => "unavailable" as const,
-      getFitbitStepCountForWindow: async () => 0,
-      getTodayFitbitStepCount: async () => 0,
+      getFitbitStepCountForWindow: async () => ({
+        totalSteps: 0,
+        syncStatus: "error" as const,
+        syncMessage: "Fitbit step sync is unavailable in this build.",
+      }),
+      getTodayFitbitStepCount: async () => ({
+        totalSteps: 0,
+        syncStatus: "error" as const,
+        syncMessage: "Fitbit step sync is unavailable in this build.",
+      }),
     };
   }
 }

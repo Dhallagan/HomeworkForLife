@@ -25,6 +25,7 @@ import {
   requestStepSourceAccess,
   useStepSource,
   type StepPermissionStatus,
+  type StepSnapshot,
   type StepSource,
 } from "../steps/service";
 import { colors, layout, spacing } from "../../theme";
@@ -41,7 +42,7 @@ type SettingAction = {
   onPress: () => void;
 };
 
-export default function ControlCenterScreen() {
+export default function SettingsScreen() {
   const [microphoneStatus, setMicrophoneStatus] =
     useState<RecordingPermissionStatus>("undetermined");
   const [healthStatus, setHealthStatus] =
@@ -52,6 +53,9 @@ export default function ControlCenterScreen() {
     useState<StepSource>("apple-health");
   const [healthPreviewSteps, setHealthPreviewSteps] = useState<number | null>(null);
   const [fitbitPreviewSteps, setFitbitPreviewSteps] = useState<number | null>(null);
+  const [fitbitSyncStatus, setFitbitSyncStatus] =
+    useState<StepSnapshot["syncStatus"]>("idle");
+  const [fitbitSyncMessage, setFitbitSyncMessage] = useState<string | null>(null);
   const hasOpenAIKey = Boolean(process.env.EXPO_PUBLIC_OPENAI_API_KEY);
   const fitbitConfigured = isFitbitStepSourceConfigured();
 
@@ -84,6 +88,8 @@ export default function ControlCenterScreen() {
     setFitbitPreviewSteps(
       fitbitSnapshot.permission === "granted" ? fitbitSnapshot.totalSteps : null,
     );
+    setFitbitSyncStatus(fitbitSnapshot.syncStatus);
+    setFitbitSyncMessage(fitbitSnapshot.syncMessage ?? null);
   }, []);
 
   useFocusEffect(
@@ -222,14 +228,20 @@ export default function ControlCenterScreen() {
         <SettingBlock
           eyebrow={selectedStepSource === "fitbit" ? "Selected" : "Available"}
           title="Fitbit"
-          tone={getPillTone(fitbitStatus)}
-          status={formatFitbitLabel(fitbitStatus, fitbitConfigured)}
+          tone={getFitbitTone(fitbitStatus, fitbitSyncStatus)}
+          status={formatFitbitLabel(
+            fitbitStatus,
+            fitbitConfigured,
+            fitbitSyncStatus,
+          )}
           description="Uses your Fitbit account as the source for today&apos;s steps and saved walk totals."
           note={getFitbitNote(
             fitbitStatus,
             selectedStepSource,
             fitbitConfigured,
             fitbitPreviewSteps,
+            fitbitSyncStatus,
+            fitbitSyncMessage,
           )}
           actions={getFitbitActions({
             fitbitConfigured,
@@ -349,12 +361,28 @@ function formatPermissionLabel(
 function formatFitbitLabel(
   status: StepPermissionStatus,
   fitbitConfigured: boolean,
+  syncStatus: StepSnapshot["syncStatus"],
 ) {
   if (!fitbitConfigured) {
     return "Setup";
   }
 
+  if (status === "granted" && syncStatus === "error") {
+    return "Sync Issue";
+  }
+
   return formatPermissionLabel(status);
+}
+
+function getFitbitTone(
+  status: StepPermissionStatus,
+  syncStatus: StepSnapshot["syncStatus"],
+) {
+  if (status === "granted" && syncStatus === "error") {
+    return "danger" as const;
+  }
+
+  return getPillTone(status);
 }
 
 function getAppleHealthNote(
@@ -390,9 +418,23 @@ function getFitbitNote(
   selectedStepSource: StepSource,
   fitbitConfigured: boolean,
   previewSteps: number | null,
+  syncStatus: StepSnapshot["syncStatus"],
+  syncMessage: string | null,
 ) {
   if (!fitbitConfigured) {
     return "Fitbit setup is bundled into this build. If Connect is still missing, refresh or restart the dev app once.";
+  }
+
+  if (status === "granted" && syncStatus === "error") {
+    if (selectedStepSource === "fitbit") {
+      return syncMessage
+        ? `${syncMessage} Fitbit is still selected, but WalkLog will not show fresh steps until sync works again.`
+        : "Fitbit is connected, but we couldn't sync steps just now. Open Fitbit to sync the device, then refresh here.";
+    }
+
+    return syncMessage
+      ? `${syncMessage} Fitbit is connected, but step reads are failing right now.`
+      : "Fitbit is connected, but we couldn't sync steps just now. Open Fitbit to sync the device, then refresh here.";
   }
 
   if (selectedStepSource === "fitbit" && status === "granted") {

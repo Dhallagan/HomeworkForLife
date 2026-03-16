@@ -1,1 +1,1 @@
-export { default } from "../src/modules/settings/control-center-screen";
+export { default } from "../src/modules/settings/settings-screen";

@@ -38,16 +38,35 @@ type FitbitSession = {
   tokenType: "bearer" | "mac";
 };
 
-type FitbitIntradayResponse = {
-  "activities-steps-intraday"?: {
-    dataset?: Array<{
-      time?: string;
-      value?: number | string;
-    }>;
-  };
+class FitbitRequestError extends Error {
+  status: number;
+  body?: string;
+
+  constructor(status: number, body?: string) {
+    super(
+      body && body.length > 0
+        ? `Fitbit request failed with ${status}: ${body}`
+        : `Fitbit request failed with ${status}`,
+    );
+    this.name = "FitbitRequestError";
+    this.status = status;
+    this.body = body;
+  }
+}
+
+type FitbitDailyStepsResponse = {
+  "activities-steps"?: Array<{
+    dateTime?: string;
+    value?: number | string;
+  }>;
 };
 
 export type FitbitPermissionStatus = "granted" | "undetermined" | "unavailable";
+export type FitbitStepSyncResult = {
+  totalSteps: number;
+  syncStatus: "ok" | "error";
+  syncMessage?: string;
+};
 
 export function isFitbitConfigured() {
   return isFitbitClientConfigured();
@@ -93,6 +112,27 @@ export async function connectFitbit() {
     FITBIT_DISCOVERY,
   );
 
+  if (!tokenResponse.accessToken) {
+    console.error("Fitbit token exchange returned no access token", {
+      hasRefreshToken: Boolean(tokenResponse.refreshToken),
+      issuedAt: tokenResponse.issuedAt,
+      expiresIn: tokenResponse.expiresIn,
+      scope: tokenResponse.scope ?? null,
+      tokenType: tokenResponse.tokenType ?? "bearer",
+      rawResponse: tokenResponse.rawResponse ?? null,
+    });
+    logRawTokens("Fitbit token exchange raw values", {
+      accessToken: tokenResponse.accessToken,
+      refreshToken: tokenResponse.refreshToken,
+    });
+    return false;
+  }
+
+  logRawTokens("Fitbit token exchange raw values", {
+    accessToken: tokenResponse.accessToken,
+    refreshToken: tokenResponse.refreshToken,
+  });
+
   await writeSession({
     accessToken: tokenResponse.accessToken,
     refreshToken: tokenResponse.refreshToken,
@@ -126,26 +166,153 @@ export async function disconnectFitbit() {
 }
 
 export async function getTodayFitbitStepCount() {
-  return getFitbitStepCountForWindow(startOfDay(new Date()), new Date());
+  return getFitbitStepCountForDate(new Date());
 }
 
 export async function getFitbitStepCountForWindow(startedAt: Date, endedAt: Date) {
-  const session = await getValidSession();
+  let session = await getValidSession();
 
   if (!session) {
-    return 0;
+    console.error("Fitbit step sync failed: no valid session", {
+      startedAt: startedAt.toISOString(),
+      endedAt: endedAt.toISOString(),
+    });
+    return {
+      totalSteps: 0,
+      syncStatus: "error" as const,
+      syncMessage: "Fitbit needs to reconnect before steps can sync.",
+    };
   }
 
-  try {
-    let total = 0;
+  console.log("Fitbit step sync session", describeSession(session));
 
-    for (const segment of splitRangeByDay(startedAt, endedAt)) {
-      total += await getSegmentStepCount(session.accessToken, segment);
+  try {
+    const total = await getFitbitStepCountForDateWithToken(
+      session.accessToken,
+      endedAt,
+    );
+
+    return {
+      totalSteps: total,
+      syncStatus: "ok" as const,
+    };
+  } catch (error) {
+    if (isInvalidTokenError(error)) {
+      console.log("Fitbit step sync hit invalid_token, retrying with refresh", {
+        startedAt: startedAt.toISOString(),
+        endedAt: endedAt.toISOString(),
+      });
+
+      session = await refreshSession();
+
+      if (session) {
+        try {
+          const total = await getFitbitStepCountForDateWithToken(
+            session.accessToken,
+            endedAt,
+          );
+
+          return {
+            totalSteps: total,
+            syncStatus: "ok" as const,
+          };
+        } catch (retryError) {
+          console.error("Fitbit step sync retry failed", {
+            startedAt: startedAt.toISOString(),
+            endedAt: endedAt.toISOString(),
+            message: getErrorMessage(retryError),
+            stack: retryError instanceof Error ? retryError.stack : undefined,
+          });
+          return {
+            totalSteps: 0,
+            syncStatus: "error" as const,
+            syncMessage: getFitbitSyncMessage(retryError),
+          };
+        }
+      }
     }
 
-    return total;
-  } catch {
-    return 0;
+    console.error("Fitbit step sync failed", {
+      startedAt: startedAt.toISOString(),
+      endedAt: endedAt.toISOString(),
+      message: getErrorMessage(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    return {
+      totalSteps: 0,
+      syncStatus: "error" as const,
+      syncMessage: getFitbitSyncMessage(error),
+    };
+  }
+}
+
+async function getFitbitStepCountForDate(date: Date) {
+  let session = await getValidSession();
+
+  if (!session) {
+    console.error("Fitbit day step sync failed: no valid session", {
+      date: date.toISOString(),
+    });
+    return {
+      totalSteps: 0,
+      syncStatus: "error" as const,
+      syncMessage: "Fitbit needs to reconnect before steps can sync.",
+    };
+  }
+
+  console.log("Fitbit day step sync session", describeSession(session));
+
+  try {
+    const total = await getFitbitStepCountForDateWithToken(session.accessToken, date);
+
+    return {
+      totalSteps: total,
+      syncStatus: "ok" as const,
+    };
+  } catch (error) {
+    if (isInvalidTokenError(error)) {
+      console.log("Fitbit day step sync hit invalid_token, retrying with refresh", {
+        date: date.toISOString(),
+      });
+
+      session = await refreshSession();
+
+      if (session) {
+        try {
+          const total = await getFitbitStepCountForDateWithToken(
+            session.accessToken,
+            date,
+          );
+
+          return {
+            totalSteps: total,
+            syncStatus: "ok" as const,
+          };
+        } catch (retryError) {
+          console.error("Fitbit day step sync retry failed", {
+            date: date.toISOString(),
+            message: getErrorMessage(retryError),
+            stack: retryError instanceof Error ? retryError.stack : undefined,
+          });
+          return {
+            totalSteps: 0,
+            syncStatus: "error" as const,
+            syncMessage: getFitbitSyncMessage(retryError),
+          };
+        }
+      }
+    }
+
+    console.error("Fitbit day step sync failed", {
+      date: date.toISOString(),
+      message: getErrorMessage(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    return {
+      totalSteps: 0,
+      syncStatus: "error" as const,
+      syncMessage: getFitbitSyncMessage(error),
+    };
   }
 }
 
@@ -164,6 +331,15 @@ async function getValidSession() {
     return null;
   }
 
+  if (!session.accessToken) {
+    console.error("Fitbit stored session is missing an access token", {
+      ...describeSession(session),
+    });
+    logRawTokens("Fitbit stored session raw values", session);
+    await deleteStoredValue(FITBIT_SESSION_KEY);
+    return null;
+  }
+
   const tokenResponse = new TokenResponse({
     accessToken: session.accessToken,
     expiresIn: session.expiresIn,
@@ -171,6 +347,11 @@ async function getValidSession() {
     refreshToken: session.refreshToken,
     scope: session.scope,
     tokenType: session.tokenType,
+  });
+
+  console.log("Fitbit stored session", {
+    ...describeSession(session),
+    shouldRefresh: tokenResponse.shouldRefresh(),
   });
 
   if (!tokenResponse.shouldRefresh()) {
@@ -182,7 +363,22 @@ async function getValidSession() {
     return null;
   }
 
+  return refreshSession(session);
+}
+
+async function refreshSession(existingSession?: FitbitSession | null) {
+  const session = existingSession ?? (await readSession());
+
+  if (!session?.refreshToken) {
+    if (session) {
+      await deleteStoredValue(FITBIT_SESSION_KEY);
+    }
+    return null;
+  }
+
   try {
+    console.log("Fitbit refreshing session", describeSession(session));
+
     const refreshed = await refreshAsync(
       {
         clientId: FITBIT_CLIENT_ID,
@@ -201,21 +397,23 @@ async function getValidSession() {
       tokenType: refreshed.tokenType ?? session.tokenType,
     };
 
+    console.log("Fitbit refreshed session", describeSession(nextSession));
     await writeSession(nextSession);
     return nextSession;
-  } catch {
+  } catch (error) {
+    console.error("Fitbit token refresh failed", {
+      message: getErrorMessage(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     await deleteStoredValue(FITBIT_SESSION_KEY);
     return null;
   }
 }
 
-async function getSegmentStepCount(
-  accessToken: string,
-  segment: { day: Date; startedAt: Date; endedAt: Date },
-) {
+async function getFitbitStepCountForDateWithToken(accessToken: string, date: Date) {
   const url =
     "https://api.fitbit.com/1/user/-/activities/steps/date/" +
-    `${formatDate(segment.day)}/1d/1min/time/${formatTime(segment.startedAt)}/${formatTime(segment.endedAt)}.json`;
+    `${formatDate(date)}/${formatDate(date)}/1min.json`;
 
   const response = await fetch(url, {
     headers: {
@@ -224,49 +422,21 @@ async function getSegmentStepCount(
   });
 
   if (!response.ok) {
-    throw new Error(`Fitbit request failed with ${response.status}`);
-  }
+    const body = await response.text();
+    const isInvalidToken = response.status === 401 && body.includes("invalid_token");
+    const logFn = isInvalidToken ? console.log : console.error;
 
-  const payload = (await response.json()) as FitbitIntradayResponse;
-  const dataset = payload["activities-steps-intraday"]?.dataset ?? [];
-
-  return dataset.reduce((sum, point) => {
-    const value = Number(point.value ?? 0);
-    return sum + (Number.isFinite(value) ? value : 0);
-  }, 0);
-}
-
-function splitRangeByDay(startedAt: Date, endedAt: Date) {
-  if (endedAt <= startedAt) {
-    return [{ day: startedAt, startedAt, endedAt }];
-  }
-
-  const segments: Array<{ day: Date; startedAt: Date; endedAt: Date }> = [];
-  let cursor = new Date(startedAt);
-
-  while (cursor < endedAt) {
-    const endOfDay = new Date(
-      cursor.getFullYear(),
-      cursor.getMonth(),
-      cursor.getDate(),
-      23,
-      59,
-      0,
-      0,
-    );
-    const segmentEnd = endOfDay < endedAt ? endOfDay : endedAt;
-
-    segments.push({
-      day: new Date(cursor),
-      startedAt: new Date(cursor),
-      endedAt: new Date(segmentEnd),
+    logFn("Fitbit step request failed", {
+      status: response.status,
+      url,
+      body,
     });
-
-    cursor = new Date(segmentEnd);
-    cursor.setMinutes(cursor.getMinutes() + 1);
+    throw new FitbitRequestError(response.status, body);
   }
 
-  return segments;
+  const payload = (await response.json()) as FitbitDailyStepsResponse;
+  const value = Number(payload["activities-steps"]?.[0]?.value ?? 0);
+  return Number.isFinite(value) ? value : 0;
 }
 
 function formatDate(date: Date) {
@@ -275,13 +445,6 @@ function formatDate(date: Date) {
   const day = `${date.getDate()}`.padStart(2, "0");
 
   return `${year}-${month}-${day}`;
-}
-
-function formatTime(date: Date) {
-  const hours = `${date.getHours()}`.padStart(2, "0");
-  const minutes = `${date.getMinutes()}`.padStart(2, "0");
-
-  return `${hours}:${minutes}`;
 }
 
 function startOfDay(date: Date) {
@@ -305,4 +468,81 @@ async function readSession() {
 
 async function writeSession(session: FitbitSession) {
   await setStoredValue(FITBIT_SESSION_KEY, JSON.stringify(session));
+}
+
+function getFitbitSyncMessage(error: unknown) {
+  if (error instanceof Error) {
+    if (error.message.includes("401")) {
+      return "Fitbit login expired while reading steps. Reconnect your account and try again.";
+    }
+
+    if (error.message.includes("403")) {
+      return "This Fitbit connection can sign in, but step sync is not allowed for this account or app setup.";
+    }
+
+    if (error.message.includes("429")) {
+      return "Fitbit rate-limited step sync. Try refreshing again in a minute.";
+    }
+  }
+
+  return "We couldn't sync Fitbit steps just now. Open Fitbit to sync the device, then refresh here.";
+}
+
+function isInvalidTokenError(error: unknown) {
+  return (
+    error instanceof FitbitRequestError &&
+    error.status === 401 &&
+    typeof error.body === "string" &&
+    error.body.includes("invalid_token")
+  );
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
+function describeSession(session: FitbitSession) {
+  return {
+    accessToken: redactToken(session.accessToken),
+    refreshToken: redactToken(session.refreshToken),
+    issuedAt: session.issuedAt,
+    expiresIn: session.expiresIn,
+    expiresAt:
+      session.expiresIn !== undefined
+        ? new Date((session.issuedAt + session.expiresIn) * 1000).toISOString()
+        : null,
+    scope: session.scope ?? null,
+    tokenType: session.tokenType,
+    hasRefreshToken: Boolean(session.refreshToken),
+  };
+}
+
+function redactToken(token?: string) {
+  if (!token) {
+    return null;
+  }
+
+  if (token.length <= 8) {
+    return `${token.slice(0, 2)}...${token.slice(-2)}`;
+  }
+
+  return `${token.slice(0, 4)}...${token.slice(-4)}`;
+}
+
+function logRawTokens(
+  label: string,
+  session: { accessToken?: string; refreshToken?: string },
+) {
+  if (!__DEV__) {
+    return;
+  }
+
+  console.log(label, {
+    accessToken: session.accessToken ?? null,
+    refreshToken: session.refreshToken ?? null,
+  });
 }

@@ -121,12 +121,32 @@ export default function WalkScreen() {
 
     try {
       const session = await finish();
-      const stepSnapshot = await getWindowStepSnapshot(
-        session.startedAt,
-        session.endedAt,
-      );
-      const stepCount =
-        stepSnapshot.permission === "granted" ? stepSnapshot.totalSteps : 0;
+      let stepCount = 0;
+
+      if (stepSourceRef.current === "fitbit") {
+        const stepSnapshot = await getTodayStepSnapshot();
+
+        if (
+          stepSnapshot.permission === "granted" &&
+          stepSnapshot.source === "fitbit" &&
+          stepSnapshot.syncStatus === "ok"
+        ) {
+          // Fitbit now returns the day total; derive the walk delta from the
+          // baseline captured when the walk started.
+          stepCount = Math.max(
+            0,
+            stepSnapshot.totalSteps - baselineTodayStepsRef.current,
+          );
+        }
+      } else {
+        const stepSnapshot = await getWindowStepSnapshot(
+          session.startedAt,
+          session.endedAt,
+        );
+        stepCount =
+          stepSnapshot.permission === "granted" ? stepSnapshot.totalSteps : 0;
+      }
+
       const entry = await createWalkEntry(db, {
         body: session.transcript,
         startedAt: session.startedAt,

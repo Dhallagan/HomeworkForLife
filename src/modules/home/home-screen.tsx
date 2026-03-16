@@ -181,7 +181,7 @@ export default function HomeScreen() {
   const handleOpenMenu = useCallback(() => {
     const actions = [
       { label: "Profile", onPress: () => router.push("/profile") },
-      { label: "Control Center", onPress: () => router.push("/settings") },
+      { label: "Settings", onPress: () => router.push("/settings") },
     ];
 
     if (Platform.OS === "ios") {
