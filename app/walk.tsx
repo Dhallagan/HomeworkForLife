@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -284,8 +284,22 @@ export default function WalkScreen() {
     <SafeAreaView style={styles.safeArea} edges={["top", "left", "right", "bottom"]}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>Today</Text>
-          <Text style={styles.dateText}>{formatCompactDate(new Date())}</Text>
+          <View style={styles.headerTextBlock}>
+            <Text style={styles.title}>Today</Text>
+            <Text style={styles.dateText}>{formatCompactDate(new Date())}</Text>
+          </View>
+          {isRecording && !isTranscribing ? (
+            <Pressable
+              hitSlop={12}
+              style={({ pressed }) => [
+                styles.headerCancelAction,
+                pressed && styles.headerCancelActionPressed,
+              ]}
+              onPress={handleCancelWalk}
+            >
+              <Text style={styles.headerCancelText}>Cancel</Text>
+            </Pressable>
+          ) : null}
         </View>
 
         <View style={styles.metricsRow}>
@@ -344,16 +358,6 @@ export default function WalkScreen() {
               onPress={() => void handleFinish()}
             />
           )}
-
-          {isRecording && !isTranscribing ? (
-            <PaperActionButton
-              style={styles.cancelWalkButton}
-              textStyle={styles.cancelWalkButtonText}
-              onPress={handleCancelWalk}
-            >
-              Cancel Walk
-            </PaperActionButton>
-          ) : null}
         </View>
       </View>
     </SafeAreaView>
@@ -377,9 +381,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
     paddingHorizontal: 18,
     paddingTop: 10,
     gap: 2,
+  },
+  headerTextBlock: {
+    gap: 2,
+    flex: 1,
   },
   title: {
     color: colors.text,
@@ -394,6 +405,22 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     fontWeight: "300",
     letterSpacing: -0.6,
+  },
+  headerCancelAction: {
+    minHeight: 34,
+    justifyContent: "center",
+    paddingHorizontal: 4,
+    marginTop: 4,
+  },
+  headerCancelActionPressed: {
+    opacity: 0.55,
+  },
+  headerCancelText: {
+    color: colors.muted,
+    fontFamily: "Courier",
+    fontSize: 11,
+    letterSpacing: 1,
+    textTransform: "uppercase",
   },
   metricsRow: {
     flexDirection: "row",
@@ -490,18 +517,6 @@ const styles = StyleSheet.create({
     fontFamily: "Courier",
     fontSize: 13,
     letterSpacing: 0.8,
-    textTransform: "uppercase",
-  },
-  cancelWalkButton: {
-    marginTop: 12,
-    minWidth: 180,
-    backgroundColor: colors.background,
-  },
-  cancelWalkButtonText: {
-    color: colors.muted,
-    fontFamily: "Courier",
-    fontSize: 11,
-    letterSpacing: 1,
     textTransform: "uppercase",
   },
 });
