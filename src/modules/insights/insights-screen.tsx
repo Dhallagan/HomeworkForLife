@@ -222,7 +222,7 @@ export default function InsightsScreen({
   const handleOpenOverflow = useCallback(() => {
     const actions = [
       { label: "Profile", onPress: () => router.push("/profile") },
-      { label: "Settings", onPress: () => router.push("/settings") },
+      { label: "Control Center", onPress: () => router.push("/settings") },
     ];
 
     if (Platform.OS === "ios") {

@@ -155,6 +155,24 @@ export default function WalkScreen() {
     }
   }
 
+  function handleCancelWalk() {
+    Alert.alert("Cancel this walk?", "This will discard the current recording.", [
+      {
+        text: "Keep walking",
+        style: "cancel",
+      },
+      {
+        text: "Discard",
+        style: "destructive",
+        onPress: () => {
+          void reset().finally(() => {
+            router.replace("/");
+          });
+        },
+      },
+    ]);
+  }
+
   function handleCancelTranscription() {
     Alert.alert(
       "Discard this walk?",
@@ -306,6 +324,16 @@ export default function WalkScreen() {
               onPress={() => void handleFinish()}
             />
           )}
+
+          {isRecording && !isTranscribing ? (
+            <PaperActionButton
+              style={styles.cancelWalkButton}
+              textStyle={styles.cancelWalkButtonText}
+              onPress={handleCancelWalk}
+            >
+              Cancel Walk
+            </PaperActionButton>
+          ) : null}
         </View>
       </View>
     </SafeAreaView>
@@ -442,6 +470,18 @@ const styles = StyleSheet.create({
     fontFamily: "Courier",
     fontSize: 13,
     letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  cancelWalkButton: {
+    marginTop: 12,
+    minWidth: 180,
+    backgroundColor: colors.background,
+  },
+  cancelWalkButtonText: {
+    color: colors.muted,
+    fontFamily: "Courier",
+    fontSize: 11,
+    letterSpacing: 1,
     textTransform: "uppercase",
   },
 });

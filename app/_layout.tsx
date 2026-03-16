@@ -35,7 +35,7 @@ export default function RootLayout() {
         />
         <Stack.Screen name="entry/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="profile" options={{ title: "Profile" }} />
-        <Stack.Screen name="settings" options={{ title: "Settings" }} />
+        <Stack.Screen name="settings" options={{ title: "Control Center" }} />
       </Stack>
     </SQLiteProvider>
   );

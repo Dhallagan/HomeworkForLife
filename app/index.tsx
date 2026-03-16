@@ -8,7 +8,7 @@ import {
   type NativeScrollEvent,
 } from "react-native";
 
-import HomeScreen from "../src/modules/home/home-screen";
+import HomeScreen from "../src/modules/home";
 import InsightsScreen from "../src/modules/insights/insights-screen";
 import { colors } from "../src/theme";
 
