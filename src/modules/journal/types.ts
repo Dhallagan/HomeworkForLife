@@ -3,6 +3,7 @@ export type JournalEntry = {
   createdAt: Date;
   source: "walk" | "manual";
   title: string;
+  titleEmoji?: string;
   body: string;
   sessionId?: string;
 };
@@ -29,3 +30,34 @@ export type EntryListItem = JournalEntry & {
 };
 
 export type EntryDetail = EntryListItem;
+
+export type DailySummary = {
+  date: string;
+  entryCount: number;
+  walkCount: number;
+  totalWords: number;
+  walkSteps: number;
+  totalSteps: number | null;
+  latestEntryPreview: string | null;
+};
+
+export type JournalExportEntry = {
+  id: string;
+  createdAt: string;
+  source: "walk" | "manual";
+  title: string;
+  titleEmoji?: string;
+  body: string;
+  sessionId?: string;
+  startedAt?: string;
+  endedAt?: string;
+  durationSec?: number;
+  stepCount?: number;
+};
+
+export type JournalExportData = {
+  version: 1;
+  exportedAt: string;
+  entries: JournalExportEntry[];
+  dailySteps: DailySteps[];
+};

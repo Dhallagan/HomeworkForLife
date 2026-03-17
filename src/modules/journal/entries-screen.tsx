@@ -1,7 +1,7 @@
-import { startTransition, useCallback, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useState } from "react";
 import {
-  Alert,
-  SectionList,
+  Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -10,77 +10,40 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import {
-  EntrySwipeRow,
-  type EntrySwipeRowHandle,
-} from "../../components/entry-swipe-row";
+import { PaperRow } from "../../components/notebook";
 import { formatLongDay } from "../../lib/date";
-import { deleteEntry, listEntries } from "./repository";
-import type { EntryListItem } from "./types";
+import { listDailySummaries, listEntries } from "./repository";
+import type { DailySummary, EntryListItem } from "./types";
 import { colors } from "../../theme";
-
-type EntrySection = {
-  title: string;
-  data: EntryListItem[];
-};
 
 export default function EntriesScreen() {
   const db = useSQLiteContext();
   const router = useRouter();
-  const [entries, setEntries] = useState<EntryListItem[]>([]);
-  const openSwipeableRef = useRef<EntrySwipeRowHandle | null>(null);
-  const todayLabel = formatLongDay(new Date());
-  const sections = useMemo(() => groupEntriesByDay(entries), [entries]);
-  const loadEntries = useCallback(async () => {
+  const [days, setDays] = useState<DailySummary[]>([]);
+  const [entriesByDay, setEntriesByDay] = useState<Record<string, EntryListItem[]>>({});
+
+  const loadDays = useCallback(async () => {
     try {
-      const loadedEntries = await listEntries(db);
+      const [loadedDays, loadedEntries] = await Promise.all([
+        listDailySummaries(db),
+        listEntries(db),
+      ]);
+
+      const nextEntriesByDay = groupEntriesByDay(loadedEntries);
+
       startTransition(() => {
-        setEntries(loadedEntries);
+        setDays(loadedDays);
+        setEntriesByDay(nextEntriesByDay);
       });
     } catch (error) {
-      console.error("Failed to load entries", error);
+      console.error("Failed to load day history", error);
     }
   }, [db]);
 
   useFocusEffect(
     useCallback(() => {
-      void loadEntries();
-
-      return () => {
-        openSwipeableRef.current?.close();
-        openSwipeableRef.current = null;
-      };
-    }, [loadEntries]),
-  );
-
-  const handleRowOpen = useCallback((nextSwipeable: EntrySwipeRowHandle) => {
-    if (openSwipeableRef.current && openSwipeableRef.current !== nextSwipeable) {
-      openSwipeableRef.current.close();
-    }
-
-    openSwipeableRef.current = nextSwipeable;
-  }, []);
-
-  const handleDelete = useCallback(
-    async (entryId: string) => {
-      openSwipeableRef.current?.close();
-      openSwipeableRef.current = null;
-
-      startTransition(() => {
-        setEntries((currentEntries) =>
-          currentEntries.filter((entry) => entry.id !== entryId),
-        );
-      });
-
-      try {
-        await deleteEntry(db, entryId);
-      } catch (error) {
-        console.error("Failed to delete entry", error);
-        Alert.alert("Couldn't delete entry", "Please try again.");
-        await loadEntries();
-      }
-    },
-    [db, loadEntries],
+      void loadDays();
+    }, [loadDays]),
   );
 
   return (
@@ -88,55 +51,106 @@ export default function EntriesScreen() {
       <View style={styles.container}>
         <View style={styles.headerRow}>
           <View style={styles.header}>
-            <Text style={styles.title}>All Entries</Text>
+            <Text style={styles.title}>History</Text>
           </View>
         </View>
 
-        <SectionList
-          style={styles.list}
-          sections={sections}
-          keyExtractor={(item) => item.id}
-          stickySectionHeadersEnabled={false}
-          contentContainerStyle={styles.listContent}
-          ListEmptyComponent={
-            <View style={styles.listEmptyWrap}>
-              <Text style={styles.emptyText}>No entries yet.</Text>
-            </View>
-          }
-          renderSectionHeader={({ section }) => (
-            <Text style={styles.sectionTitle}>
-              {section.title === todayLabel ? "Today" : section.title}
-            </Text>
-          )}
-          renderItem={({ item }) => (
-            <EntrySwipeRow
-              entry={item}
-              onOpen={handleRowOpen}
-              onDelete={() => void handleDelete(item.id)}
-              onPress={() => router.push(`/entry/${item.id}`)}
-            />
-          )}
-          SectionSeparatorComponent={() => <View style={styles.sectionGap} />}
-        />
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {days.map((day) => (
+            <Pressable
+              key={day.date}
+              onPress={() => router.push(`/day/${day.date}`)}
+              style={({ pressed }) => [pressed && styles.rowPressed]}
+            >
+              <PaperRow style={styles.dayRow}>
+                <Text style={styles.dayLabel}>{formatDayLabel(day.date)}</Text>
+                <Text style={styles.dayStats}>{formatSummaryStats(day)}</Text>
+                {entriesByDay[day.date]?.length ? (
+                  <View style={styles.entryList}>
+                    {entriesByDay[day.date].map((entry) => (
+                      <View key={entry.id} style={styles.entryPreviewRow}>
+                        <Text numberOfLines={1} style={styles.entryTitle}>
+                          {formatEntryTitle(entry)}
+                        </Text>
+                        {entry.body.trim() ? (
+                          <Text numberOfLines={2} style={styles.dayPreview}>
+                            {entry.body.trim()}
+                          </Text>
+                        ) : (
+                          <Text style={styles.dayPreviewMuted}>Empty entry</Text>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.dayPreviewMuted}>No journal entries saved.</Text>
+                )}
+              </PaperRow>
+            </Pressable>
+          ))}
+
+          {days.length === 0 ? (
+            <Text style={styles.emptyText}>No history yet.</Text>
+          ) : null}
+        </ScrollView>
       </View>
     </SafeAreaView>
   );
 }
 
-function groupEntriesByDay(entries: EntryListItem[]): EntrySection[] {
-  const sections = new Map<string, EntryListItem[]>();
+function formatDayLabel(dayKey: string) {
+  const parsed = new Date(`${dayKey}T12:00:00`);
+  return formatLongDay(parsed);
+}
 
-  for (const entry of entries) {
-    const key = formatLongDay(entry.createdAt);
-    const nextGroup = sections.get(key) ?? [];
-    nextGroup.push(entry);
-    sections.set(key, nextGroup);
+function formatSummaryStats(day: DailySummary) {
+  const parts: string[] = [];
+
+  if (day.entryCount > 0) {
+    parts.push(day.entryCount === 1 ? "1 entry" : `${day.entryCount} entries`);
   }
 
-  return Array.from(sections.entries()).map(([title, data]) => ({
-    title,
-    data,
-  }));
+  if (day.totalSteps !== null) {
+    parts.push(`${day.totalSteps.toLocaleString()} steps`);
+  } else if (day.walkSteps > 0) {
+    parts.push(`${day.walkSteps.toLocaleString()} walk steps`);
+  }
+
+  if (parts.length === 0) {
+    return "No entries or steps recorded.";
+  }
+
+  return parts.join("  |  ");
+}
+
+function groupEntriesByDay(entries: EntryListItem[]) {
+  const grouped: Record<string, EntryListItem[]> = {};
+
+  for (const entry of entries) {
+    const dayKey = entry.createdAt.toISOString().slice(0, 10);
+
+    if (!grouped[dayKey]) {
+      grouped[dayKey] = [];
+    }
+
+    grouped[dayKey].push(entry);
+  }
+
+  return grouped;
+}
+
+function formatEntryTitle(entry: EntryListItem) {
+  const emoji = entry.titleEmoji?.trim();
+
+  if (emoji) {
+    return `${emoji} ${entry.title}`;
+  }
+
+  return entry.title;
 }
 
 const styles = StyleSheet.create({
@@ -167,32 +181,62 @@ const styles = StyleSheet.create({
     fontWeight: "300",
     letterSpacing: -1.2,
   },
-  list: {
+  scrollView: {
     flex: 1,
   },
-  listContent: {
-    paddingTop: 2,
+  scrollContent: {
+    paddingTop: 4,
     paddingBottom: 18,
   },
-  listEmptyWrap: {
-    paddingHorizontal: 18,
-    paddingTop: 8,
+  rowPressed: {
+    opacity: 0.82,
   },
-  sectionTitle: {
+  dayRow: {
+    backgroundColor: colors.background,
+  },
+  dayLabel: {
+    color: colors.text,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: "300",
+    letterSpacing: -0.4,
+  },
+  dayStats: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: "Courier",
+  },
+  entryList: {
+    gap: 10,
+    paddingTop: 2,
+    paddingLeft: 14,
+  },
+  entryPreviewRow: {
+    gap: 2,
+  },
+  entryTitle: {
+    color: colors.text,
+    fontSize: 17,
+    lineHeight: 23,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+  },
+  dayPreview: {
     color: colors.text,
     fontSize: 15,
-    lineHeight: 18,
-    letterSpacing: 0.8,
-    fontFamily: "Courier",
-    paddingHorizontal: 18,
-    paddingBottom: 4,
+    lineHeight: 22,
   },
-  sectionGap: {
-    height: 10,
+  dayPreviewMuted: {
+    color: colors.muted,
+    fontSize: 15,
+    lineHeight: 22,
   },
   emptyText: {
     color: colors.muted,
     fontSize: 16,
     lineHeight: 22,
+    paddingHorizontal: 18,
+    paddingTop: 8,
   },
 });

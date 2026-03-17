@@ -1,6 +1,9 @@
 import { useCallback, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "expo-router";
+import { File, Paths } from "expo-file-system";
+import * as Sharing from "expo-sharing";
+import { useSQLiteContext } from "expo-sqlite";
 
 import {
   Panel,
@@ -28,6 +31,14 @@ import {
   type StepSnapshot,
   type StepSource,
 } from "../steps/service";
+import { formatEntryTitle } from "../../lib/date";
+import { generateEntryTitle } from "../insights/openai";
+import {
+  buildJournalExport,
+  listEntries,
+  updateEntry,
+} from "../journal/repository";
+import type { EntryListItem } from "../journal/types";
 import { colors, layout, spacing } from "../../theme";
 
 type RecordingPermissionStatus =
@@ -43,6 +54,7 @@ type SettingAction = {
 };
 
 export default function SettingsScreen() {
+  const db = useSQLiteContext();
   const [microphoneStatus, setMicrophoneStatus] =
     useState<RecordingPermissionStatus>("undetermined");
   const [healthStatus, setHealthStatus] =
@@ -56,6 +68,8 @@ export default function SettingsScreen() {
   const [fitbitSyncStatus, setFitbitSyncStatus] =
     useState<StepSnapshot["syncStatus"]>("idle");
   const [fitbitSyncMessage, setFitbitSyncMessage] = useState<string | null>(null);
+  const [isExportingJournal, setIsExportingJournal] = useState(false);
+  const [isGeneratingTitles, setIsGeneratingTitles] = useState(false);
   const hasOpenAIKey = Boolean(process.env.EXPO_PUBLIC_OPENAI_API_KEY);
   const fitbitConfigured = isFitbitStepSourceConfigured();
 
@@ -128,6 +142,116 @@ export default function SettingsScreen() {
       "Fitbit Setup",
       "Restart the dev app if Fitbit still shows Setup. This build now includes your client ID and redirect URI.",
     );
+  }
+
+  async function handleExportJournal() {
+    if (isExportingJournal) {
+      return;
+    }
+
+    setIsExportingJournal(true);
+
+    try {
+      const sharingAvailable = await Sharing.isAvailableAsync();
+
+      if (!sharingAvailable) {
+        Alert.alert(
+          "Export Unavailable",
+          "Sharing is not available in this environment, so WalkLog could not open the export sheet.",
+        );
+        return;
+      }
+
+      const exportData = await buildJournalExport(db);
+      const timestamp = exportData.exportedAt.replace(/[:.]/g, "-");
+      const exportFile = new File(Paths.cache, `walklog-journal-${timestamp}.json`);
+
+      exportFile.create({ intermediates: true, overwrite: true });
+      exportFile.write(JSON.stringify(exportData, null, 2));
+
+      await Sharing.shareAsync(exportFile.uri, {
+        UTI: "public.json",
+        mimeType: "application/json",
+        dialogTitle: "Export journal data",
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not export your journal.";
+
+      Alert.alert("Export Failed", message);
+    } finally {
+      setIsExportingJournal(false);
+    }
+  }
+
+  async function handleGenerateTitles() {
+    if (isGeneratingTitles) {
+      return;
+    }
+
+    if (!hasOpenAIKey) {
+      Alert.alert(
+        "OpenAI Key Missing",
+        "Set EXPO_PUBLIC_OPENAI_API_KEY before generating AI titles.",
+      );
+      return;
+    }
+
+    setIsGeneratingTitles(true);
+
+    try {
+      const entries = await listEntries(db);
+      const candidates = entries.filter(shouldGenerateTitle);
+
+      if (candidates.length === 0) {
+        Alert.alert(
+          "Titles Up To Date",
+          "No entries are using the default date title right now.",
+        );
+        return;
+      }
+
+      let updatedCount = 0;
+      let emojiCount = 0;
+
+      for (const entry of candidates) {
+        const nextTitlePackage = await generateEntryTitle(entry);
+
+        if (!nextTitlePackage.title) {
+          continue;
+        }
+
+        const shouldReplaceTitle = isDefaultEntryTitle(entry);
+        const nextEmoji = entry.titleEmoji?.trim()
+          ? entry.titleEmoji
+          : nextTitlePackage.emoji;
+
+        await updateEntry(db, entry.id, {
+          title: shouldReplaceTitle ? nextTitlePackage.title : entry.title,
+          titleEmoji: nextEmoji,
+          body: entry.body,
+        });
+        updatedCount += 1;
+
+        if (!entry.titleEmoji?.trim() && nextEmoji) {
+          emojiCount += 1;
+        }
+      }
+
+      Alert.alert(
+        updatedCount > 0 ? "Titles Updated" : "No Titles Generated",
+        updatedCount > 0
+          ? `Updated ${updatedCount} ${updatedCount === 1 ? "entry" : "entries"} and added ${emojiCount} ${emojiCount === 1 ? "emoji" : "emojis"}.`
+          : "WalkLog could not generate any new titles this time.",
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not generate journal titles.";
+
+      Alert.alert("Title Generation Failed", message);
+    } finally {
+      setIsGeneratingTitles(false);
+    }
   }
 
   return (
@@ -271,8 +395,65 @@ export default function SettingsScreen() {
           }
         />
       </Panel>
+
+      <SectionLabel>Data</SectionLabel>
+      <Panel style={styles.groupPanel}>
+        <SettingBlock
+          eyebrow="Optional"
+          title="AI Titles"
+          tone={hasOpenAIKey ? "default" : "danger"}
+          status={
+            isGeneratingTitles
+              ? "Working"
+              : hasOpenAIKey
+                ? "Ready"
+                : "Missing"
+          }
+          description="Generate short AI titles for entries that still use the original date-based title."
+          note="WalkLog fills in a leading emoji when missing, and only replaces titles that still match the default date format."
+          actions={[
+            {
+              label: isGeneratingTitles
+                ? "Generating Titles..."
+                : "Generate Missing Titles",
+              kind: hasOpenAIKey ? "secondary" : "primary",
+              onPress: () => void handleGenerateTitles(),
+            },
+          ]}
+        />
+
+        <View style={styles.divider} />
+
+        <SettingBlock
+          eyebrow="Journal"
+          title="Export Entries"
+          tone="default"
+          status={isExportingJournal ? "Preparing" : "Ready"}
+          description="Create a JSON export of your journal entries, walk metadata, and saved daily step totals."
+          note="WalkLog opens the iPhone share sheet so you can save the file to Files, AirDrop it, or send it elsewhere."
+          actions={[
+            {
+              label: isExportingJournal ? "Preparing Export..." : "Export Journal Data",
+              kind: "secondary",
+              onPress: () => void handleExportJournal(),
+            },
+          ]}
+        />
+      </Panel>
     </Screen>
   );
+}
+
+function shouldGenerateTitle(entry: EntryListItem) {
+  if (!entry.body.trim()) {
+    return false;
+  }
+
+  return isDefaultEntryTitle(entry) || !entry.titleEmoji?.trim();
+}
+
+function isDefaultEntryTitle(entry: EntryListItem) {
+  return entry.title.trim() === formatEntryTitle(entry.createdAt);
 }
 
 function SettingBlock({

@@ -34,6 +34,7 @@ export default function EntryDetailScreen() {
 
   const [entry, setEntry] = useState<EntryDetail | null>(null);
   const [title, setTitle] = useState("");
+  const [titleEmoji, setTitleEmoji] = useState("");
   const [body, setBody] = useState("");
   const dirtyRef = useRef(false);
   const hasCreatedManualRef = useRef(false);
@@ -51,7 +52,7 @@ export default function EntryDetailScreen() {
   useFocusEffect(() => {
     return () => {
       if (dirtyRef.current && entry) {
-        void saveChanges(entry.id, title, body);
+        void saveChanges(entry.id, title, titleEmoji, body);
       }
     };
   });
@@ -69,6 +70,7 @@ export default function EntryDetailScreen() {
       if (persisted) {
         setEntry(persisted);
         setTitle(persisted.title);
+        setTitleEmoji(persisted.titleEmoji ?? "");
         setBody(persisted.body);
       }
 
@@ -80,21 +82,28 @@ export default function EntryDetailScreen() {
     if (persisted) {
       setEntry(persisted);
       setTitle(persisted.title);
+      setTitleEmoji(persisted.titleEmoji ?? "");
       setBody(persisted.body);
     }
   }
 
-  async function saveChanges(nextId: string, nextTitle: string, nextBody: string) {
+  async function saveChanges(
+    nextId: string,
+    nextTitle: string,
+    nextTitleEmoji: string,
+    nextBody: string,
+  ) {
     dirtyRef.current = false;
     await updateEntry(db, nextId, {
       title: nextTitle.trim() || entry?.title || "",
+      titleEmoji: nextTitleEmoji,
       body: nextBody,
     });
   }
 
   async function handleDone() {
     if (dirtyRef.current && entry) {
-      await saveChanges(entry.id, title, body);
+      await saveChanges(entry.id, title, titleEmoji, body);
     }
 
     if (navigation.canGoBack()) {
@@ -134,6 +143,40 @@ export default function EntryDetailScreen() {
         lineGap={ENTRY_RULE_GAP}
         lineOffset={ENTRY_RULE_OFFSET}
       >
+        <View style={styles.titleRow}>
+          <TextInput
+            value={titleEmoji}
+            onChangeText={(nextValue) => {
+              dirtyRef.current = true;
+              setTitleEmoji(nextValue);
+            }}
+            onBlur={() => {
+              if (dirtyRef.current) {
+                void saveChanges(entry.id, title, titleEmoji, body);
+              }
+            }}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="🌤️"
+            placeholderTextColor={colors.muted}
+            style={styles.emojiInput}
+          />
+          <TextInput
+            value={title}
+            onChangeText={(nextValue) => {
+              dirtyRef.current = true;
+              setTitle(nextValue);
+            }}
+            onBlur={() => {
+              if (dirtyRef.current) {
+                void saveChanges(entry.id, title, titleEmoji, body);
+              }
+            }}
+            placeholder="Give this entry a title."
+            placeholderTextColor={colors.muted}
+            style={styles.titleInput}
+          />
+        </View>
         <TextInput
           value={body}
           onChangeText={(nextValue) => {
@@ -142,7 +185,7 @@ export default function EntryDetailScreen() {
           }}
           onBlur={() => {
             if (dirtyRef.current) {
-              void saveChanges(entry.id, title, body);
+              void saveChanges(entry.id, title, titleEmoji, body);
             }
           }}
           multiline
@@ -223,8 +266,33 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 12,
   },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    paddingBottom: 8,
+  },
+  emojiInput: {
+    width: 52,
+    color: colors.text,
+    fontSize: 24,
+    lineHeight: ENTRY_RULE_GAP,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    textAlign: "center",
+  },
+  titleInput: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 24,
+    lineHeight: ENTRY_RULE_GAP,
+    fontWeight: "700",
+    letterSpacing: -0.5,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+  },
   bodyInput: {
-    minHeight: 472,
+    minHeight: 428,
     color: colors.text,
     fontSize: 17,
     lineHeight: ENTRY_RULE_GAP,

@@ -33,6 +33,7 @@ export default function RootLayout() {
           name="walk"
           options={{ headerShown: false, presentation: "card" }}
         />
+        <Stack.Screen name="day/[date]" options={{ title: "Day" }} />
         <Stack.Screen name="entry/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="profile" options={{ title: "Profile" }} />
         <Stack.Screen name="settings" options={{ title: "Settings" }} />

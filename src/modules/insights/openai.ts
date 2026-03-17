@@ -193,6 +193,68 @@ export async function generateDailyHomeCards(entries: EntryListItem[]) {
   return cardsPromise;
 }
 
+export async function generateEntryTitle(entry: EntryListItem) {
+  const { apiKey, model } = getInsightsConfig();
+  const prompt = [
+    "Create a title package for a single journal entry.",
+    "Return JSON only.",
+    'Use this shape: {"title":"","emoji":""}.',
+    "Rules:",
+    "- title must be 2 to 10 words.",
+    "- title must be specific and grounded in the entry.",
+    "- title must not include emoji or quotes.",
+    "- emoji must be exactly one leading emoji that fits the day's main theme.",
+    "- Prefer concrete subject matter over abstract self-help phrasing.",
+    "- If a place or travel location clearly anchors the entry, it is good to include that in the title.",
+    "- If the entry naturally supports a pattern like location + theme, use it.",
+    "- Good examples: Nicaragua Sunday Chill, TPA to LGA, Dentist Day, CRM Drama.",
+    "- Avoid vague titles like Reflections, Busy Day, Mixed Emotions, or Another Day.",
+    "",
+    "Entry details:",
+    buildEntryContext([entry]),
+  ].join("\n");
+
+  const response = await createInsightsResponse({
+    apiKey,
+    model,
+    instructions:
+      "You write concise, grounded journal titles and choose a single fitting emoji. Be specific, natural, and avoid generic phrasing. Output valid JSON only.",
+    input: prompt,
+  });
+
+  return parseEntryTitlePackage(response);
+}
+
+function parseEntryTitlePackage(responseText: string) {
+  let parsed: { title?: unknown; emoji?: unknown } | null = null;
+
+  try {
+    parsed = JSON.parse(responseText) as { title?: unknown; emoji?: unknown };
+  } catch {
+    const normalized = responseText.replace(/```json|```/g, "").trim();
+    parsed = JSON.parse(normalized) as { title?: unknown; emoji?: unknown };
+  }
+
+  const title =
+    typeof parsed.title === "string"
+      ? parsed.title
+          .replace(/^["'“”]+|["'“”]+$/g, "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 80)
+      : "";
+  const emoji =
+    typeof parsed.emoji === "string"
+      ? parsed.emoji.replace(/\s+/g, " ").trim().slice(0, 8)
+      : "";
+
+  if (!title) {
+    throw new Error("OpenAI returned an invalid title payload.");
+  }
+
+  return { title, emoji: emoji || undefined };
+}
+
 export function peekCachedDailyHomeCards(entries: EntryListItem[]) {
   if (!hasInsightsConfig()) {
     return null;

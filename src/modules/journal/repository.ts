@@ -1,13 +1,22 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
 import { formatDayKey, formatEntryTitle } from "../../lib/date";
-import type { DailySteps, EntryDetail, EntryListItem, JournalEntry, WalkSession } from "./types";
+import type {
+  DailySteps,
+  JournalExportData,
+  DailySummary,
+  EntryDetail,
+  EntryListItem,
+  JournalEntry,
+  WalkSession,
+} from "./types";
 
 type EntryRow = {
   id: string;
   created_at: string;
   source: "walk" | "manual";
   title: string;
+  title_emoji: string | null;
   body: string;
   session_id: string | null;
   started_at: string | null;
@@ -35,6 +44,7 @@ export async function initializeDatabase(db: SQLiteDatabase) {
       created_at TEXT NOT NULL,
       source TEXT NOT NULL,
       title TEXT NOT NULL,
+      title_emoji TEXT,
       body TEXT NOT NULL,
       session_id TEXT
     );
@@ -53,6 +63,17 @@ export async function initializeDatabase(db: SQLiteDatabase) {
       total_steps INTEGER NOT NULL
     );
   `);
+
+  const journalColumns = await db.getAllAsync<{ name: string }>(
+    "PRAGMA table_info(journal_entries)",
+  );
+
+  if (!journalColumns.some((column) => column.name === "title_emoji")) {
+    await db.execAsync(`
+      ALTER TABLE journal_entries
+      ADD COLUMN title_emoji TEXT;
+    `);
+  }
 }
 
 export async function listEntries(db: SQLiteDatabase): Promise<EntryListItem[]> {
@@ -62,6 +83,7 @@ export async function listEntries(db: SQLiteDatabase): Promise<EntryListItem[]> 
       journal_entries.created_at,
       journal_entries.source,
       journal_entries.title,
+      journal_entries.title_emoji,
       journal_entries.body,
       journal_entries.session_id,
       walk_sessions.started_at,
@@ -88,6 +110,7 @@ export async function getEntryById(
         journal_entries.created_at,
         journal_entries.source,
         journal_entries.title,
+        journal_entries.title_emoji,
         journal_entries.body,
         journal_entries.session_id,
         walk_sessions.started_at,
@@ -118,13 +141,22 @@ export async function createManualEntry(db: SQLiteDatabase) {
 
   await db.runAsync(
     `
-      INSERT INTO journal_entries (id, created_at, source, title, body, session_id)
-      VALUES (?, ?, ?, ?, ?, NULL)
+      INSERT INTO journal_entries (
+        id,
+        created_at,
+        source,
+        title,
+        title_emoji,
+        body,
+        session_id
+      )
+      VALUES (?, ?, ?, ?, ?, ?, NULL)
     `,
     entry.id,
     entry.createdAt.toISOString(),
     entry.source,
     entry.title,
+    null,
     entry.body,
   );
 
@@ -148,12 +180,21 @@ export async function createWalkEntry(
   await db.withTransactionAsync(async () => {
     await db.runAsync(
       `
-        INSERT INTO journal_entries (id, created_at, source, title, body, session_id)
-        VALUES (?, ?, 'walk', ?, ?, ?)
+        INSERT INTO journal_entries (
+          id,
+          created_at,
+          source,
+          title,
+          title_emoji,
+          body,
+          session_id
+        )
+        VALUES (?, ?, 'walk', ?, ?, ?, ?)
       `,
       entryId,
       createdAt.toISOString(),
       formatEntryTitle(createdAt),
+      null,
       input.body.trim(),
       sessionId,
     );
@@ -178,15 +219,16 @@ export async function createWalkEntry(
 export async function updateEntry(
   db: SQLiteDatabase,
   id: string,
-  updates: Pick<JournalEntry, "title" | "body">,
+  updates: Pick<JournalEntry, "title" | "titleEmoji" | "body">,
 ) {
   await db.runAsync(
     `
       UPDATE journal_entries
-      SET title = ?, body = ?
+      SET title = ?, title_emoji = ?, body = ?
       WHERE id = ?
     `,
     updates.title.trim() || formatEntryTitle(new Date()),
+    updates.titleEmoji?.trim() || null,
     updates.body,
     id,
   );
@@ -251,12 +293,128 @@ export async function getDailySteps(
   };
 }
 
+export async function listDailySummaries(db: SQLiteDatabase): Promise<DailySummary[]> {
+  const [entries, dailyStepsRows] = await Promise.all([
+    listEntries(db),
+    db.getAllAsync<{ date: string; total_steps: number }>(`
+      SELECT date, total_steps
+      FROM daily_steps
+      ORDER BY date DESC
+    `),
+  ]);
+
+  const dailyStepsByDate = new Map(
+    dailyStepsRows.map((row) => [row.date, row.total_steps]),
+  );
+  const summaries = new Map<string, DailySummary>();
+
+  for (const entry of entries) {
+    const dayKey = formatDayKey(entry.createdAt);
+    const existing = summaries.get(dayKey);
+    const wordCount = countWords(entry.body);
+    const walkSteps = entry.stepCount ?? 0;
+    const preview = entry.body.trim() || null;
+
+    if (existing) {
+      existing.entryCount += 1;
+      existing.totalWords += wordCount;
+      existing.walkCount += entry.source === "walk" ? 1 : 0;
+      existing.walkSteps += walkSteps;
+
+      if (!existing.latestEntryPreview && preview) {
+        existing.latestEntryPreview = preview;
+      }
+
+      continue;
+    }
+
+    summaries.set(dayKey, {
+      date: dayKey,
+      entryCount: 1,
+      walkCount: entry.source === "walk" ? 1 : 0,
+      totalWords: wordCount,
+      walkSteps,
+      totalSteps: dailyStepsByDate.get(dayKey) ?? null,
+      latestEntryPreview: preview,
+    });
+  }
+
+  for (const [date, totalSteps] of dailyStepsByDate.entries()) {
+    if (summaries.has(date)) {
+      continue;
+    }
+
+    summaries.set(date, {
+      date,
+      entryCount: 0,
+      walkCount: 0,
+      totalWords: 0,
+      walkSteps: 0,
+      totalSteps,
+      latestEntryPreview: null,
+    });
+  }
+
+  return [...summaries.values()].sort((left, right) => right.date.localeCompare(left.date));
+}
+
+export async function listEntriesForDay(
+  db: SQLiteDatabase,
+  date: string,
+): Promise<EntryListItem[]> {
+  const entries = await listEntries(db);
+  return entries.filter((entry) => formatDayKey(entry.createdAt) === date);
+}
+
+export async function buildJournalExport(
+  db: SQLiteDatabase,
+): Promise<JournalExportData> {
+  const [entries, dailyStepsRows] = await Promise.all([
+    listEntries(db),
+    db.getAllAsync<{ date: string; total_steps: number }>(`
+      SELECT date, total_steps
+      FROM daily_steps
+      ORDER BY date DESC
+    `),
+  ]);
+
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    entries: entries.map((entry) => ({
+      id: entry.id,
+      createdAt: entry.createdAt.toISOString(),
+      source: entry.source,
+      title: entry.title,
+      titleEmoji: entry.titleEmoji,
+      body: entry.body,
+      sessionId: entry.sessionId,
+      startedAt: entry.startedAt?.toISOString(),
+      endedAt: entry.endedAt?.toISOString(),
+      durationSec: entry.durationSec,
+      stepCount: entry.stepCount,
+    })),
+    dailySteps: dailyStepsRows.map((row) => ({
+      date: row.date,
+      totalSteps: row.total_steps,
+    })),
+  };
+}
+
+function countWords(body: string) {
+  return body
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+}
+
 function mapEntryRow(row: EntryRow): EntryDetail {
   return {
     id: row.id,
     createdAt: new Date(row.created_at),
     source: row.source,
     title: row.title,
+    titleEmoji: row.title_emoji ?? undefined,
     body: row.body,
     sessionId: row.session_id ?? undefined,
     startedAt: row.started_at ? new Date(row.started_at) : undefined,
