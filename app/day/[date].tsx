@@ -138,8 +138,8 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     color: colors.muted,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 12,
+    lineHeight: 15,
   },
   scrollView: {
     flex: 1,
@@ -155,8 +155,8 @@ const styles = StyleSheet.create({
   },
   entryTitle: {
     color: colors.text,
-    fontSize: 18,
-    lineHeight: 24,
+    fontSize: 14,
+    lineHeight: 17,
     fontWeight: "700",
     letterSpacing: -0.4,
     paddingRight: 18,
@@ -164,16 +164,16 @@ const styles = StyleSheet.create({
   },
   entryBody: {
     color: colors.text,
-    fontSize: 17,
-    lineHeight: 24,
+    fontSize: 12,
+    lineHeight: 15,
     paddingRight: 18,
   },
   entryMeta: {
     color: colors.muted,
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 10,
+    lineHeight: 14,
     fontFamily: "Courier",
-    paddingTop: 8,
+    paddingTop: 4,
   },
   emptyText: {
     color: colors.muted,

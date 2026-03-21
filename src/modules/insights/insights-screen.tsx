@@ -285,125 +285,117 @@ export default function InsightsScreen({
             }
           }}
         >
-          {entries.length > 0 ? (
-            <View style={styles.previewCard}>
-              <Text style={styles.previewEyebrow}>Top Of Mind</Text>
-              <Text numberOfLines={5} style={styles.previewBody}>
-                {!aiReady
-                  ? "Open Profile to see the journal overview."
-                  : isLoadingProfilePreview
-                    ? "Reading the past month..."
-                    : profilePreviewError
-                      ? profilePreviewError
-                      : profilePreview}
-              </Text>
-              {aiReady && !isLoadingProfilePreview && !profilePreviewError ? (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => router.push("/profile")}
-                  style={({ pressed }) => [
-                    styles.previewLink,
-                    pressed && styles.previewLinkPressed,
-                  ]}
-                >
-                  <Text style={styles.previewLinkText}>Read more</Text>
-                </Pressable>
+          <View style={styles.scrollMain}>
+            <View style={styles.contentStack}>
+              {entries.length > 0 ? (
+                <View style={styles.previewCard}>
+                  <Text style={styles.previewEyebrow}>Top Of Mind</Text>
+                  <Text numberOfLines={5} style={styles.previewBody}>
+                    {!aiReady
+                      ? "Open Profile to see the journal overview."
+                      : isLoadingProfilePreview
+                        ? "Reading the past month..."
+                        : profilePreviewError
+                          ? profilePreviewError
+                          : profilePreview}
+                  </Text>
+                  {aiReady && !isLoadingProfilePreview && !profilePreviewError ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => router.push("/profile")}
+                      style={({ pressed }) => [
+                        styles.previewLink,
+                        pressed && styles.previewLinkPressed,
+                      ]}
+                    >
+                      <Text style={styles.previewLinkText}>Read more</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               ) : null}
-            </View>
-          ) : null}
 
-          {messages.length === 0 ? (
-            <View style={styles.emptyState}>
-              <View style={styles.starterList}>
-                {starterPrompts.map((prompt) => (
-                  <Pressable
-                    key={prompt}
-                    style={styles.promptChip}
-                    onPress={() => void handleSendQuestion(prompt)}
-                  >
-                    <Text style={styles.promptText}>{prompt}</Text>
-                  </Pressable>
-                ))}
+              {messages.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <View style={styles.starterList}>
+                    {starterPrompts.map((prompt) => (
+                      <Pressable
+                        key={prompt}
+                        style={styles.promptChip}
+                        onPress={() => void handleSendQuestion(prompt)}
+                      >
+                        <Text style={styles.promptText}>{prompt}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.chatThread}>
+                  {messages.map((message) => (
+                    <View
+                      key={message.id}
+                      style={[
+                        styles.chatBubble,
+                        message.role === "user"
+                          ? styles.userBubble
+                          : styles.assistantBubble,
+                      ]}
+                    >
+                      <Text style={styles.chatRole}>
+                        {message.role === "user" ? "You" : "Journal"}
+                      </Text>
+                      <Text style={styles.chatText}>{message.content}</Text>
+                    </View>
+                  ))}
+                  {isSending ? (
+                    <View
+                      style={[styles.chatBubble, styles.assistantBubble, styles.thinkingBubble]}
+                    >
+                      <Text style={styles.chatRole}>Journal</Text>
+                      <Text style={styles.thinkingText}>
+                        Thinking{".".repeat(thinkingFrame + 1)}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              )}
+
+              {!aiReady ? (
+                <Text style={styles.emptyText}>
+                  Chat needs an OpenAI key configured through env. Production should move
+                  this behind a proxy.
+                </Text>
+              ) : null}
+
+              {entries.length === 0 ? (
+                <Text style={styles.emptyText}>
+                  Add a few entries first. Then this screen can answer questions about
+                  what feels latest, repeated, unresolved, or most important.
+                </Text>
+              ) : null}
+
+              {chatError ? <Text style={styles.errorText}>{chatError}</Text> : null}
+            </View>
+
+            <View style={styles.composerShell}>
+              <View style={styles.composer}>
+                <TextInput
+                  value={chatDraft}
+                  onChangeText={(nextValue) => {
+                    chatDraftRef.current = nextValue;
+                    setChatDraft(nextValue);
+                  }}
+                  onSubmitEditing={() => void handleSendQuestion()}
+                  placeholder="Ask your journal anything."
+                  placeholderTextColor={colors.muted}
+                  multiline
+                  returnKeyType="send"
+                  submitBehavior="submit"
+                  style={styles.chatInput}
+                />
               </View>
             </View>
-          ) : (
-            <View style={styles.chatThread}>
-              {messages.map((message) => (
-                <View
-                  key={message.id}
-                  style={[
-                    styles.chatBubble,
-                    message.role === "user"
-                      ? styles.userBubble
-                      : styles.assistantBubble,
-                  ]}
-                >
-                  <Text style={styles.chatRole}>
-                    {message.role === "user" ? "You" : "Journal"}
-                  </Text>
-                  <Text style={styles.chatText}>{message.content}</Text>
-                </View>
-              ))}
-              {isSending ? (
-                <View style={[styles.chatBubble, styles.assistantBubble, styles.thinkingBubble]}>
-                  <Text style={styles.chatRole}>Journal</Text>
-                  <Text style={styles.thinkingText}>
-                    Thinking{".".repeat(thinkingFrame + 1)}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          )}
-
-          {!aiReady ? (
-            <Text style={styles.emptyText}>
-              Chat needs an OpenAI key configured through env. Production should move
-              this behind a proxy.
-            </Text>
-          ) : null}
-
-          {entries.length === 0 ? (
-            <Text style={styles.emptyText}>
-              Add a few entries first. Then this screen can answer questions about
-              what feels latest, repeated, unresolved, or most important.
-            </Text>
-          ) : null}
-
-          {chatError ? <Text style={styles.errorText}>{chatError}</Text> : null}
-        </ScrollView>
-
-        <View style={styles.composerShell}>
-          <View style={styles.composer}>
-            <TextInput
-              value={chatDraft}
-              onChangeText={(nextValue) => {
-                chatDraftRef.current = nextValue;
-                setChatDraft(nextValue);
-              }}
-              onSubmitEditing={() => void handleSendQuestion()}
-              placeholder="Ask your journal anything."
-              placeholderTextColor={colors.muted}
-              multiline
-              returnKeyType="send"
-              rejectResponderTermination={false}
-              submitBehavior="submit"
-              style={styles.chatInput}
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Send message"
-              disabled={isSending}
-              onPressIn={() => void handleSendQuestion()}
-              style={({ pressed }) => [
-                styles.sendIconButton,
-                pressed && !isSending && styles.sendIconButtonPressed,
-                isSending && styles.sendIconButtonDisabled,
-              ]}
-            >
-              <Text style={styles.sendIcon}>{isSending ? "…" : "↑"}</Text>
-            </Pressable>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -459,7 +451,15 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   scrollContent: {
-    paddingBottom: spacing.lg,
+    flexGrow: 1,
+    paddingBottom: spacing.sm,
+  },
+  scrollMain: {
+    flexGrow: 1,
+    gap: spacing.md,
+  },
+  contentStack: {
+    flexGrow: 1,
     gap: spacing.md,
   },
   emptyState: {
@@ -572,7 +572,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   composer: {
-    position: "relative",
     paddingHorizontal: 12,
     paddingVertical: 10,
     minHeight: 74,
@@ -589,33 +588,8 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     paddingHorizontal: 0,
     paddingTop: 4,
-    paddingBottom: 28,
-    paddingRight: 52,
+    paddingBottom: 4,
+    paddingRight: 0,
     textAlignVertical: "top",
-  },
-  sendIconButton: {
-    position: "absolute",
-    right: 10,
-    bottom: 10,
-    width: 40,
-    height: 40,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.accent,
-    flexShrink: 0,
-  },
-  sendIconButtonPressed: {
-    opacity: 0.88,
-  },
-  sendIconButtonDisabled: {
-    opacity: 0.6,
-  },
-  sendIcon: {
-    color: "#FFF8F2",
-    fontSize: 20,
-    lineHeight: 20,
-    fontWeight: "600",
-    marginTop: -2,
   },
 });

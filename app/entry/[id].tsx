@@ -23,8 +23,8 @@ import {
 import type { EntryDetail } from "../../src/modules/journal/types";
 import { colors } from "../../src/theme";
 
-const ENTRY_RULE_GAP = 32;
-const ENTRY_RULE_OFFSET = 40;
+const ENTRY_RULE_GAP = 24;
+const ENTRY_RULE_OFFSET = 56;
 
 export default function EntryDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -232,51 +232,51 @@ const styles = StyleSheet.create({
   },
   dateText: {
     color: colors.text,
-    fontSize: 20,
-    lineHeight: 24,
+    fontSize: 14,
+    lineHeight: 17,
     fontWeight: "300",
     letterSpacing: -0.6,
   },
   metaText: {
     color: colors.muted,
-    fontSize: 12,
+    fontSize: 10,
     letterSpacing: 1,
     fontFamily: "Courier",
   },
   walkMetaText: {
     color: colors.muted,
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 10,
+    lineHeight: 14,
     letterSpacing: 0.8,
     fontFamily: "Courier",
     paddingTop: 2,
   },
   doneText: {
     color: colors.text,
-    fontSize: 13,
+    fontSize: 11,
     letterSpacing: 1,
     fontFamily: "Courier",
     paddingTop: 4,
   },
   sheet: {
-    minHeight: 520,
+    minHeight: 460,
     marginBottom: 16,
   },
   sheetContent: {
-    paddingTop: 8,
+    paddingTop: 10,
     paddingBottom: 12,
   },
   titleRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    paddingBottom: 8,
+    alignItems: "center",
+    gap: 10,
+    paddingBottom: 12,
   },
   emojiInput: {
-    width: 52,
+    width: 42,
     color: colors.text,
-    fontSize: 24,
-    lineHeight: ENTRY_RULE_GAP,
+    fontSize: 14,
+    lineHeight: 18,
     paddingVertical: 0,
     paddingHorizontal: 0,
     textAlign: "center",
@@ -284,17 +284,17 @@ const styles = StyleSheet.create({
   titleInput: {
     flex: 1,
     color: colors.text,
-    fontSize: 24,
-    lineHeight: ENTRY_RULE_GAP,
+    fontSize: 14,
+    lineHeight: 18,
     fontWeight: "700",
     letterSpacing: -0.5,
     paddingVertical: 0,
     paddingHorizontal: 0,
   },
   bodyInput: {
-    minHeight: 428,
+    minHeight: 360,
     color: colors.text,
-    fontSize: 17,
+    fontSize: 12,
     lineHeight: ENTRY_RULE_GAP,
     paddingTop: 0,
     paddingBottom: 0,

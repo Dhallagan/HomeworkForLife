@@ -67,28 +67,37 @@ export default function EntriesScreen() {
               style={({ pressed }) => [pressed && styles.rowPressed]}
             >
               <PaperRow style={styles.dayRow}>
-                <Text style={styles.dayLabel}>{formatDayLabel(day.date)}</Text>
-                <Text style={styles.dayStats}>{formatSummaryStats(day)}</Text>
-                {entriesByDay[day.date]?.length ? (
-                  <View style={styles.entryList}>
-                    {entriesByDay[day.date].map((entry) => (
-                      <View key={entry.id} style={styles.entryPreviewRow}>
-                        <Text numberOfLines={1} style={styles.entryTitle}>
-                          {formatEntryTitle(entry)}
-                        </Text>
-                        {entry.body.trim() ? (
-                          <Text numberOfLines={2} style={styles.dayPreview}>
-                            {entry.body.trim()}
-                          </Text>
-                        ) : (
-                          <Text style={styles.dayPreviewMuted}>Empty entry</Text>
-                        )}
-                      </View>
-                    ))}
+                <View style={styles.dayLedgerRow}>
+                  <View style={styles.dayColumn}>
+                    <Text style={styles.dayDate}>{formatShortDate(day.date)}</Text>
+                    <Text style={styles.dayWeekday}>{formatWeekday(day.date)}</Text>
                   </View>
-                ) : (
-                  <Text style={styles.dayPreviewMuted}>No journal entries saved.</Text>
-                )}
+
+                  <View style={styles.dayDivider} />
+
+                  {entriesByDay[day.date]?.length ? (
+                    <View style={styles.entryList}>
+                      {entriesByDay[day.date].map((entry) => (
+                        <View key={entry.id} style={styles.entryPreviewRow}>
+                          <Text numberOfLines={1} style={styles.entryTitle}>
+                            {formatEntryTitle(entry)}
+                          </Text>
+                          {entry.body.trim() ? (
+                            <Text numberOfLines={2} style={styles.dayPreview}>
+                              {entry.body.trim()}
+                            </Text>
+                          ) : (
+                            <Text style={styles.dayPreviewMuted}>Empty entry</Text>
+                          )}
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <View style={styles.entryList}>
+                      <Text style={styles.dayPreviewMuted}>No journal entries saved.</Text>
+                    </View>
+                  )}
+                </View>
               </PaperRow>
             </Pressable>
           ))}
@@ -107,24 +116,19 @@ function formatDayLabel(dayKey: string) {
   return formatLongDay(parsed);
 }
 
-function formatSummaryStats(day: DailySummary) {
-  const parts: string[] = [];
+function formatShortDate(dayKey: string) {
+  const [year, month, day] = dayKey.split("-");
 
-  if (day.entryCount > 0) {
-    parts.push(day.entryCount === 1 ? "1 entry" : `${day.entryCount} entries`);
+  if (!year || !month || !day) {
+    return dayKey;
   }
 
-  if (day.totalSteps !== null) {
-    parts.push(`${day.totalSteps.toLocaleString()} steps`);
-  } else if (day.walkSteps > 0) {
-    parts.push(`${day.walkSteps.toLocaleString()} walk steps`);
-  }
+  return `${Number(month)}/${Number(day)}`;
+}
 
-  if (parts.length === 0) {
-    return "No entries or steps recorded.";
-  }
-
-  return parts.join("  |  ");
+function formatWeekday(dayKey: string) {
+  const label = formatDayLabel(dayKey);
+  return label.split(",")[0] ?? label;
 }
 
 function groupEntriesByDay(entries: EntryListItem[]) {
@@ -194,43 +198,59 @@ const styles = StyleSheet.create({
   dayRow: {
     backgroundColor: colors.background,
   },
-  dayLabel: {
-    color: colors.text,
-    fontSize: 18,
-    lineHeight: 24,
-    fontWeight: "300",
-    letterSpacing: -0.4,
+  dayLedgerRow: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: 10,
   },
-  dayStats: {
-    color: colors.muted,
+  dayColumn: {
+    width: 56,
+    alignItems: "flex-end",
+    paddingTop: 2,
+    gap: 1,
+  },
+  dayDate: {
+    color: colors.text,
     fontSize: 13,
-    lineHeight: 18,
-    fontFamily: "Courier",
+    lineHeight: 15,
+    fontWeight: "700",
+    textAlign: "right",
+  },
+  dayWeekday: {
+    color: colors.text,
+    fontSize: 12,
+    lineHeight: 14,
+    textAlign: "right",
+  },
+  dayDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: "stretch",
+    backgroundColor: colors.rule,
   },
   entryList: {
-    gap: 10,
-    paddingTop: 2,
-    paddingLeft: 14,
+    flex: 1,
+    gap: 8,
+    paddingTop: 1,
   },
   entryPreviewRow: {
-    gap: 2,
+    gap: 1,
   },
   entryTitle: {
     color: colors.text,
-    fontSize: 17,
-    lineHeight: 23,
+    fontSize: 14,
+    lineHeight: 17,
     fontWeight: "700",
     letterSpacing: -0.3,
   },
   dayPreview: {
     color: colors.text,
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 12,
+    lineHeight: 15,
   },
   dayPreviewMuted: {
     color: colors.muted,
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 12,
+    lineHeight: 15,
   },
   emptyText: {
     color: colors.muted,

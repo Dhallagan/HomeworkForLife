@@ -85,6 +85,20 @@ Use direct, editorial hierarchy:
 Use `PaperSheet` for editable long-form text.
 Keep chrome minimal.
 
+For journal reading and editing surfaces, use the tighter History type scale as the reference point:
+
+- small date and meta text
+- compact bold entry titles
+- small preview/body copy
+- favor one continuous reading column over stacked sub-panels
+
+When showing journal history by day, prefer a linear ledger treatment:
+
+- date in a narrow left gutter
+- one divider between date and content
+- entries stacked in one continuous right column
+- avoid extra stats rows or boxed subsections unless they are necessary for comprehension
+
 ### Walk Capture
 
 Use one active focal area.
