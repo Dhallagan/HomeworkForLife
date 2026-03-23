@@ -16,12 +16,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { PaperRecordButton } from "../../components/notebook";
 import { formatLongDay } from "../../lib/date";
 import {
+  backfillMissingTitles,
   generateDailyHomeCards,
   hasInsightsConfig,
   peekCachedDailyHomeCards,
   type DailyHomeCards,
 } from "../insights/openai";
-import { listEntries, upsertDailySteps } from "../journal/repository";
+import { listEntries, updateEntry, upsertDailySteps } from "../journal/repository";
 import type { EntryListItem } from "../journal/types";
 import {
   getTodayStepSnapshot,
@@ -136,6 +137,14 @@ export default function HomeScreen({
       if (aiReady && todayEntries.length > 0) {
         void loadDailyHomeCards(todayEntries);
       }
+
+      backfillMissingTitles(nextEntries, (entryId, title, emoji) => {
+        void updateEntry(db, entryId, {
+          title,
+          titleEmoji: emoji,
+          body: nextEntries.find((e) => e.id === entryId)?.body ?? "",
+        });
+      });
     } catch (error) {
       console.error("Failed to load Home", error);
       startTransition(() => {

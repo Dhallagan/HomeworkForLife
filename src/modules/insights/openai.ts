@@ -255,6 +255,73 @@ function parseEntryTitlePackage(responseText: string) {
   return { title, emoji: emoji || undefined };
 }
 
+const backfillInFlight = new Set<string>();
+
+export function backfillMissingTitles(
+  entries: EntryListItem[],
+  onUpdate: (entryId: string, title: string, emoji: string) => void,
+) {
+  if (!hasInsightsConfig()) {
+    return;
+  }
+
+  const candidates = entries.filter(
+    (entry) =>
+      entry.body.trim().length > 0 &&
+      !backfillInFlight.has(entry.id) &&
+      (isDefaultTitle(entry) || !entry.titleEmoji?.trim()),
+  );
+
+  if (candidates.length === 0) {
+    return;
+  }
+
+  void processBackfillQueue(candidates, onUpdate);
+}
+
+function isDefaultTitle(entry: EntryListItem) {
+  const defaultTitle = formatCompactDate(entry.createdAt);
+  const entryTitle = entry.title.trim();
+
+  if (entryTitle === defaultTitle) {
+    return true;
+  }
+
+  const altDefault = new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(entry.createdAt);
+
+  return entryTitle === altDefault;
+}
+
+async function processBackfillQueue(
+  entries: EntryListItem[],
+  onUpdate: (entryId: string, title: string, emoji: string) => void,
+) {
+  for (const entry of entries) {
+    if (backfillInFlight.has(entry.id)) {
+      continue;
+    }
+
+    backfillInFlight.add(entry.id);
+
+    try {
+      const titlePackage = await generateEntryTitle(entry);
+
+      if (titlePackage.title) {
+        onUpdate(entry.id, titlePackage.title, titlePackage.emoji ?? "");
+      }
+    } catch (error) {
+      console.error("Backfill title failed for", entry.id, error);
+    } finally {
+      backfillInFlight.delete(entry.id);
+    }
+  }
+}
+
 export function peekCachedDailyHomeCards(entries: EntryListItem[]) {
   if (!hasInsightsConfig()) {
     return null;
