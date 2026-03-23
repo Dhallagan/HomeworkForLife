@@ -60,39 +60,42 @@ export default function EntriesScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {days.map((day, index) => (
-            <View key={day.date} style={styles.dayRow}>
+            <View key={day.date}>
               {index > 0 ? <View style={styles.daySeparator} /> : null}
-              <Text style={styles.dayDate}>
-                {formatWeekday(day.date)}, {formatShortDate(day.date)}
-              </Text>
-
-              {entriesByDay[day.date]?.length ? (
-                <View style={styles.entryList}>
-                  {entriesByDay[day.date].map((entry) => (
-                    <Pressable
-                      key={entry.id}
-                      onPress={() => router.push(`/entry/${entry.id}`)}
-                      style={({ pressed }) => [styles.entryRow, pressed && styles.rowPressed]}
-                    >
-                      <Text style={styles.entryEmoji}>
-                        {entry.titleEmoji?.trim() || "\u00b7"}
-                      </Text>
-                      <View style={styles.entryContent}>
-                        <Text numberOfLines={1} style={styles.entryTitle}>
-                          {entry.title}
-                        </Text>
-                        {entry.body.trim() ? (
-                          <Text numberOfLines={1} style={styles.entryPreview}>
-                            {entry.body.trim()}
-                          </Text>
-                        ) : null}
-                      </View>
-                    </Pressable>
-                  ))}
+              <View style={styles.dayRow}>
+                <View style={styles.dateGutter}>
+                  <Text style={styles.dayDate}>{formatShortDate(day.date)}</Text>
+                  <Text style={styles.dayWeekday}>{formatWeekday(day.date)}</Text>
                 </View>
-              ) : (
-                <Text style={styles.dayPreviewMuted}>No entries</Text>
-              )}
+
+                {entriesByDay[day.date]?.length ? (
+                  <View style={styles.entryList}>
+                    {entriesByDay[day.date].map((entry) => (
+                      <Pressable
+                        key={entry.id}
+                        onPress={() => router.push(`/entry/${entry.id}`)}
+                        style={({ pressed }) => [styles.entryRow, pressed && styles.rowPressed]}
+                      >
+                        <Text style={styles.entryEmoji}>
+                          {entry.titleEmoji?.trim() || "\u00b7"}
+                        </Text>
+                        <View style={styles.entryContent}>
+                          <Text numberOfLines={1} style={styles.entryTitle}>
+                            {entry.title}
+                          </Text>
+                          {entry.body.trim() ? (
+                            <Text numberOfLines={1} style={styles.entryPreview}>
+                              {entry.body.trim()}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.dayPreviewMuted}>No entries</Text>
+                )}
+              </View>
             </View>
           ))}
 
@@ -183,7 +186,9 @@ const styles = StyleSheet.create({
     opacity: 0.82,
   },
   dayRow: {
-    gap: 8,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 14,
   },
   daySeparator: {
     width: 3,
@@ -193,14 +198,28 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     marginBottom: 4,
   },
+  dateGutter: {
+    width: 52,
+    alignItems: "flex-end",
+    paddingTop: 2,
+    gap: 1,
+  },
   dayDate: {
     color: colors.muted,
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "right",
+  },
+  dayWeekday: {
+    color: colors.muted,
     fontSize: 11,
-    letterSpacing: 1.2,
+    letterSpacing: 0.8,
     fontFamily: "Courier",
     textTransform: "uppercase",
+    textAlign: "right",
   },
   entryList: {
+    flex: 1,
     gap: 12,
   },
   entryRow: {

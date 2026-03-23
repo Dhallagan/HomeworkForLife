@@ -28,8 +28,8 @@ import { formatEntryTitle as formatDefaultTitle } from "../../src/lib/date";
 import type { EntryDetail } from "../../src/modules/journal/types";
 import { colors } from "../../src/theme";
 
-const ENTRY_RULE_GAP = 24;
-const ENTRY_RULE_OFFSET = 56;
+const ENTRY_RULE_GAP = 28;
+const ENTRY_RULE_OFFSET = 46;
 
 export default function EntryDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -249,7 +249,7 @@ function formatWalkMeta(entry: EntryDetail) {
     parts.push(formatDuration(entry.durationSec));
   }
 
-  return parts.join("  |  ");
+  return parts.join("  ·  ");
 }
 
 const styles = StyleSheet.create({
@@ -302,20 +302,20 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sheetContent: {
-    paddingTop: 10,
+    paddingTop: 12,
     paddingBottom: 12,
   },
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingBottom: 12,
+    paddingBottom: 10,
   },
   emojiInput: {
     width: 42,
     color: colors.text,
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 16,
+    lineHeight: 20,
     paddingVertical: 0,
     paddingHorizontal: 0,
     textAlign: "center",
@@ -323,17 +323,17 @@ const styles = StyleSheet.create({
   titleInput: {
     flex: 1,
     color: colors.text,
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: "700",
-    letterSpacing: -0.5,
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: "300",
+    letterSpacing: -0.4,
     paddingVertical: 0,
     paddingHorizontal: 0,
   },
   bodyInput: {
     minHeight: 360,
     color: colors.text,
-    fontSize: 12,
+    fontSize: 15,
     lineHeight: ENTRY_RULE_GAP,
     paddingTop: 0,
     paddingBottom: 0,

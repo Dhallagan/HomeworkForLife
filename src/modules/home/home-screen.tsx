@@ -251,59 +251,42 @@ export default function HomeScreen({
           contentContainerStyle={styles.bodyContent}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.summaryWrap}>
-            <View style={styles.summaryRow}>
-              <Pressable
-                accessibilityRole={todayOverview.latestEntryRoute ? "button" : undefined}
-                disabled={!todayOverview.latestEntryRoute}
-                onPress={handleOpenLatestEntry}
-                style={({ pressed }) => [
-                  styles.summaryCard,
-                  styles.summaryCardLeft,
-                  pressed && todayOverview.latestEntryRoute && styles.summaryCardPressed,
-                ]}
-              >
-                <Text style={styles.summaryLabel}>Journal</Text>
-                <Text style={styles.summaryValue}>{todayOverview.journalValue}</Text>
-                <Text style={styles.summaryDetail}>{todayOverview.journalDetail}</Text>
-              </Pressable>
-
-              <View style={styles.summaryDivider} />
-
-              <View style={[styles.summaryCard, styles.summaryCardRight]}>
-                <Text style={styles.summaryLabel}>Steps</Text>
-                <Text style={styles.summaryValue}>{todayOverview.stepsValue}</Text>
-                <Text style={styles.summaryDetail}>{todayOverview.stepsDetail}</Text>
-              </View>
-            </View>
-          </View>
+          <Pressable
+            disabled={!todayOverview.latestEntryRoute}
+            onPress={handleOpenLatestEntry}
+            style={({ pressed }) => [
+              styles.statusLine,
+              pressed && todayOverview.latestEntryRoute && styles.statusLinePressed,
+            ]}
+          >
+            <Text style={styles.statusText}>
+              {todayOverview.journalDetail}
+              {todayOverview.stepsValue !== "--" && todayOverview.stepsValue !== "Off" && todayOverview.stepsValue !== "N/A"
+                ? `  ·  ${todayOverview.stepsValue} steps`
+                : ""}
+            </Text>
+          </Pressable>
 
           <View style={styles.cardsStack}>
             {homeCards.map((card) => (
               card.kind === "attention" ? (
-                <View key={card.body} style={[styles.homeCard, styles.homeCardAlert]}>
-                  <Text style={styles.homeCardLabel}>For Today</Text>
+                <Pressable
+                  key={card.body}
+                  onPress={() => router.push("/settings")}
+                  style={({ pressed }) => [styles.homeCard, styles.homeCardAlert, pressed && styles.homeCardAlertPressed]}
+                >
                   <Text style={styles.homeCardBody}>{card.body}</Text>
-                </View>
+                  <Text style={styles.homeCardAction}>Settings →</Text>
+                </Pressable>
               ) : (
                 <View key={card.thinkingAbout} style={styles.homeCard}>
-                  <Text style={styles.homeCardLabel}>Daily Summary</Text>
-
-                  <View style={styles.cardSection}>
-                    <Text style={styles.cardSectionLabel}>What You Were Thinking About</Text>
-                    <Text style={styles.homeCardBody}>{card.thinkingAbout}</Text>
-                  </View>
-
-                  <View style={styles.cardSection}>
-                    <Text style={styles.cardSectionLabel}>What Seems True</Text>
+                  <Text style={styles.homeCardLabel}>Top Of Mind</Text>
+                  <Text style={styles.homeCardBody}>{card.thinkingAbout}</Text>
+                  {card.whatSeemsTrue && card.whatSeemsTrue !== card.thinkingAbout ? (
                     <Text style={styles.homeCardBody}>{card.whatSeemsTrue}</Text>
-                  </View>
-
+                  ) : null}
                   {card.closeTheDay ? (
-                    <View style={styles.cardSection}>
-                      <Text style={styles.cardSectionLabel}>To Close The Day</Text>
-                      <Text style={styles.actionText}>{card.closeTheDay}</Text>
-                    </View>
+                    <Text style={styles.homeCardBodyMuted}>{card.closeTheDay}</Text>
                   ) : null}
                 </View>
               )
@@ -600,67 +583,28 @@ const styles = StyleSheet.create({
   bodyContent: {
     paddingTop: 2,
     paddingBottom: 12,
-    gap: 12,
+    gap: 16,
   },
-  summaryWrap: {
+  statusLine: {
     paddingHorizontal: 18,
-    paddingBottom: 2,
+    paddingVertical: 4,
   },
-  summaryRow: {
-    flexDirection: "row",
-    minHeight: 122,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.rule,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
+  statusLinePressed: {
+    opacity: 0.6,
   },
-  summaryCard: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 14,
-    gap: 6,
-  },
-  summaryCardLeft: {
-    borderTopLeftRadius: 20,
-    borderBottomLeftRadius: 20,
-  },
-  summaryCardRight: {
-    borderTopRightRadius: 20,
-    borderBottomRightRadius: 20,
-  },
-  summaryCardPressed: {
-    backgroundColor: colors.accentSoft,
-  },
-  summaryDivider: {
-    width: StyleSheet.hairlineWidth,
-    backgroundColor: colors.rule,
-  },
-  summaryLabel: {
+  statusText: {
     color: colors.muted,
     fontSize: 11,
     letterSpacing: 1.2,
     fontFamily: "Courier",
     textTransform: "uppercase",
   },
-  summaryValue: {
-    color: colors.text,
-    fontSize: 24,
-    lineHeight: 28,
-    fontWeight: "300",
-    letterSpacing: -0.6,
-  },
-  summaryDetail: {
-    color: colors.muted,
-    fontSize: 14,
-    lineHeight: 20,
-  },
   cardsStack: {
     paddingHorizontal: 18,
     gap: 10,
   },
   homeCard: {
-    gap: 12,
+    gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderRadius: 22,
@@ -670,6 +614,18 @@ const styles = StyleSheet.create({
   },
   homeCardAlert: {
     backgroundColor: colors.surface,
+  },
+  homeCardAlertPressed: {
+    opacity: 0.7,
+  },
+  homeCardAction: {
+    alignSelf: "flex-end",
+    color: colors.muted,
+    fontSize: 11,
+    letterSpacing: 1,
+    fontFamily: "Courier",
+    textTransform: "uppercase",
+    marginTop: 2,
   },
   homeCardLabel: {
     color: colors.muted,
@@ -683,20 +639,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
   },
-  cardSection: {
-    gap: 8,
-  },
-  cardSectionLabel: {
+  homeCardBodyMuted: {
     color: colors.muted,
-    fontSize: 11,
-    letterSpacing: 1,
-    fontFamily: "Courier",
-    textTransform: "uppercase",
-  },
-  actionText: {
-    color: colors.text,
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 20,
+    fontStyle: "italic",
   },
   bottomDock: {
     alignItems: "center",
