@@ -31,7 +31,7 @@ import {
   linkPeopleToEntry,
   listEntries,
   listPeople,
-  updateEntry,
+  updateEntryTitle,
   updatePerson,
   upsertDailySteps,
 } from "../journal/repository";
@@ -151,10 +151,9 @@ export default function HomeScreen({
       }
 
       backfillMissingTitles(nextEntries, (entryId, title, emoji) => {
-        void updateEntry(db, entryId, {
+        void updateEntryTitle(db, entryId, {
           title,
           titleEmoji: emoji,
-          body: nextEntries.find((e) => e.id === entryId)?.body ?? "",
         });
       });
 

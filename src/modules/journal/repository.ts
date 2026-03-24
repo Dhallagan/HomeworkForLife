@@ -264,6 +264,28 @@ export async function updateEntry(
   );
 }
 
+/**
+ * Update only the title and emoji of an entry without touching the body.
+ * Use this for background title generation / backfill to avoid overwriting
+ * body content with stale data from a snapshot taken before the write.
+ */
+export async function updateEntryTitle(
+  db: SQLiteDatabase,
+  id: string,
+  updates: Pick<JournalEntry, "title" | "titleEmoji">,
+) {
+  await db.runAsync(
+    `
+      UPDATE journal_entries
+      SET title = ?, title_emoji = ?
+      WHERE id = ?
+    `,
+    updates.title.trim() || formatEntryTitle(new Date()),
+    updates.titleEmoji?.trim() || null,
+    id,
+  );
+}
+
 export async function deleteEntry(db: SQLiteDatabase, id: string) {
   await db.withTransactionAsync(async () => {
     await db.runAsync(

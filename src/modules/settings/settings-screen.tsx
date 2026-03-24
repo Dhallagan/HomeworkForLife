@@ -36,7 +36,7 @@ import { generateEntryTitle } from "../insights/openai";
 import {
   buildJournalExport,
   listEntries,
-  updateEntry,
+  updateEntryTitle,
 } from "../journal/repository";
 import type { EntryListItem } from "../journal/types";
 import { colors, layout, spacing } from "../../theme";
@@ -226,10 +226,9 @@ export default function SettingsScreen() {
           ? entry.titleEmoji
           : nextTitlePackage.emoji;
 
-        await updateEntry(db, entry.id, {
+        await updateEntryTitle(db, entry.id, {
           title: shouldReplaceTitle ? nextTitlePackage.title : entry.title,
           titleEmoji: nextEmoji,
-          body: entry.body,
         });
         updatedCount += 1;
 

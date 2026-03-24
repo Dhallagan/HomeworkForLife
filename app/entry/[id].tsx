@@ -30,6 +30,7 @@ import {
   getExistingPeopleContext,
   linkPeopleToEntry,
   updateEntry,
+  updateEntryTitle,
   updatePerson,
 } from "../../src/modules/journal/repository";
 import {
@@ -193,10 +194,9 @@ export default function EntryDetailScreen() {
         body: entryBody,
       });
 
-      await updateEntry(db, entryId, {
+      await updateEntryTitle(db, entryId, {
         title: titlePackage.title || formatDefaultTitle(createdAt),
         titleEmoji: titlePackage.emoji || "",
-        body: entryBody,
       });
     } catch (error) {
       console.error("Auto-generate title failed", error);

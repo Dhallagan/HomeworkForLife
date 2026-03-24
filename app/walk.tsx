@@ -11,7 +11,7 @@ import {
 } from "../src/components/notebook";
 import { formatCompactDate, formatElapsed } from "../src/lib/date";
 import { useWalkCapture } from "../src/modules/capture/useWalkCapture";
-import { createWalkEntry, updateEntry } from "../src/modules/journal/repository";
+import { createWalkEntry, updateEntryTitle } from "../src/modules/journal/repository";
 import {
   generateEntryTitle,
   hasInsightsConfig,
@@ -162,10 +162,9 @@ export default function WalkScreen() {
       if (entry) {
         if (hasInsightsConfig() && session.transcript.trim()) {
           void generateEntryTitle(entry).then((titlePackage) => {
-            void updateEntry(db, entry.id, {
+            void updateEntryTitle(db, entry.id, {
               title: titlePackage.title || entry.title,
               titleEmoji: titlePackage.emoji || "",
-              body: entry.body,
             });
           }).catch((error) => {
             console.error("Auto-generate walk title failed", error);
