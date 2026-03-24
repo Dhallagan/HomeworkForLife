@@ -15,7 +15,12 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { listEntries } from "../journal/repository";
+import {
+  clearChatMessages,
+  listEntries,
+  loadChatMessages,
+  saveChatMessage,
+} from "../journal/repository";
 import type { EntryListItem } from "../journal/types";
 import {
   answerInsightQuestion,
@@ -55,14 +60,18 @@ export default function InsightsScreen({
     useCallback(() => {
       let isActive = true;
 
-      void listEntries(db).then((loadedEntries) => {
-        if (!isActive) {
-          return;
-        }
+      async function load() {
+        const [loadedEntries, loadedMessages] = await Promise.all([
+          listEntries(db),
+          loadChatMessages(db),
+        ]);
+
+        if (!isActive) return;
 
         setEntries(loadedEntries);
+        setMessages(loadedMessages);
 
-        if (aiReady && loadedEntries.length > 0 && messages.length === 0) {
+        if (aiReady && loadedEntries.length > 0 && loadedMessages.length === 0) {
           const cachedPreview = peekCachedReflection(loadedEntries, "30d");
 
           if (cachedPreview) {
@@ -80,12 +89,14 @@ export default function InsightsScreen({
           setProfilePreview("");
           setProfilePreviewError(null);
         }
-      });
+      }
+
+      void load();
 
       return () => {
         isActive = false;
       };
-    }, [aiReady, db, messages.length]),
+    }, [aiReady, db]),
   );
 
   const starterPrompts = useMemo(
@@ -148,22 +159,20 @@ export default function InsightsScreen({
     scrollToBottom(false);
 
     try {
-      const assistantReply = await answerInsightQuestion(
-        entries,
-        priorMessages,
-        question,
-        "all",
-      );
+      const assistantReply = await answerInsightQuestion(entries, priorMessages, question);
+      const assistantMessage: ChatMessage = {
+        id: `assistant_${Date.now()}`,
+        role: "assistant",
+        content: assistantReply,
+      };
 
-      setMessages((currentMessages) => [
-        ...currentMessages,
-        {
-          id: `assistant_${Date.now()}`,
-          role: "assistant",
-          content: assistantReply,
-        },
-      ]);
+      setMessages((currentMessages) => [...currentMessages, assistantMessage]);
       scrollToBottom();
+
+      await Promise.all([
+        saveChatMessage(db, nextUserMessage),
+        saveChatMessage(db, assistantMessage),
+      ]);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Could not answer right now.";
@@ -219,10 +228,25 @@ export default function InsightsScreen({
     }
   }
 
+  const handleClearChat = useCallback(async () => {
+    await clearChatMessages(db);
+    setMessages([]);
+    setProfilePreview("");
+    setProfilePreviewError(null);
+    const cached = peekCachedReflection(entries, "30d");
+
+    if (cached) {
+      setProfilePreview(cached);
+    } else if (aiReady && entries.length > 0) {
+      void loadProfilePreview(entries);
+    }
+  }, [aiReady, db, entries]);
+
   const handleOpenOverflow = useCallback(() => {
     const actions = [
       { label: "Profile", onPress: () => router.push("/profile") },
       { label: "Settings", onPress: () => router.push("/settings") },
+      { label: "Clear chat", onPress: () => void handleClearChat() },
     ];
 
     if (Platform.OS === "ios") {

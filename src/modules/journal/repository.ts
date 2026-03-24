@@ -65,6 +65,13 @@ export async function initializeDatabase(db: SQLiteDatabase) {
       date TEXT PRIMARY KEY NOT NULL,
       total_steps INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id TEXT PRIMARY KEY NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
   `);
 
   await db.execAsync(`
@@ -804,6 +811,41 @@ export async function deletePerson(
     await db.runAsync(`DELETE FROM people_entries WHERE person_id = ?`, id);
     await db.runAsync(`DELETE FROM people WHERE id = ?`, id);
   });
+}
+
+// ── Chat message persistence ──────────────────────────────────
+
+export async function saveChatMessage(
+  db: SQLiteDatabase,
+  message: { id: string; role: "user" | "assistant"; content: string },
+): Promise<void> {
+  await db.runAsync(
+    `INSERT OR IGNORE INTO chat_messages (id, role, content, created_at) VALUES (?, ?, ?, ?)`,
+    message.id,
+    message.role,
+    message.content,
+    new Date().toISOString(),
+  );
+}
+
+export async function loadChatMessages(
+  db: SQLiteDatabase,
+): Promise<Array<{ id: string; role: "user" | "assistant"; content: string }>> {
+  const rows = await db.getAllAsync<{
+    id: string;
+    role: string;
+    content: string;
+  }>(`SELECT id, role, content FROM chat_messages ORDER BY created_at ASC`);
+
+  return rows.map((row) => ({
+    id: row.id,
+    role: row.role as "user" | "assistant",
+    content: row.content,
+  }));
+}
+
+export async function clearChatMessages(db: SQLiteDatabase): Promise<void> {
+  await db.runAsync(`DELETE FROM chat_messages`);
 }
 
 function mapEntryRow(row: EntryRow): EntryDetail {

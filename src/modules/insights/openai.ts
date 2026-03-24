@@ -1,4 +1,4 @@
-import { formatCompactDate, formatDuration } from "../../lib/date";
+import { formatCompactDate, formatDayKey, formatDuration } from "../../lib/date";
 import type { EntryListItem, ExtractedPerson } from "../journal/types";
 import {
   buildInsightSnapshot,
@@ -6,20 +6,96 @@ import {
   type InsightTimeframe,
   type InsightSnapshot,
 } from "./analysis";
-import { buildInsightAnswerChain } from "./chain";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
-const DEFAULT_INSIGHTS_MODEL = "gpt-5-mini";
+const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
+const DEFAULT_INSIGHTS_MODEL = "gpt-4o-mini";
+const DEFAULT_CHAT_MODEL = "gpt-4o-mini";
 const MAX_CONTEXT_ENTRIES = 8;
+const MAX_TOOL_ROUNDS = 6;
 const reflectionCache = new Map<string, string>();
 const reflectionInFlight = new Map<string, Promise<string>>();
 const dailyHomeCardsCache = new Map<string, DailyHomeCards>();
 const dailyHomeCardsInFlight = new Map<string, Promise<DailyHomeCards>>();
 
-type InsightChatMessage = {
+export type InsightChatMessage = {
   role: "user" | "assistant";
   content: string;
 };
+
+// ── Chat agent types ──────────────────────────────────────────
+
+type ChatApiMessage =
+  | { role: "system"; content: string }
+  | { role: "user"; content: string }
+  | { role: "assistant"; content: string | null; tool_calls?: ToolCall[] }
+  | { role: "tool"; tool_call_id: string; content: string };
+
+type ToolCall = {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+};
+
+type ChatCompletionResponse = {
+  choices: Array<{
+    message: {
+      role: "assistant";
+      content: string | null;
+      tool_calls?: ToolCall[];
+    };
+    finish_reason: string;
+  }>;
+  error?: { message: string };
+};
+
+const CHAT_SYSTEM_PROMPT = `You are a warm, grounded journal companion. The user is talking to their own journal.
+
+You have one tool: search_entries. Use it to look up journal entries before answering any factual question about the user's history — specific dates, how often something happened, who was mentioned, where they went, etc. For purely reflective or emotional questions, you can answer from the conversation context.
+
+Guidelines:
+- Be conversational and natural, not clinical or report-like
+- When asked about specific events or patterns ("what days did I go to the gym", "when did I last see X"), always call search_entries first — and if the first search returns nothing, try again with different or broader keywords before giving up
+- When listing dates or events, include every match the tool returns — don't truncate
+- Mention dates naturally in sentences ("last Tuesday", "on March 3rd"), not as bullet citations
+- Keep answers to 2–4 sentences unless the user asks for more
+- If evidence is thin or ambiguous, say so gently and ask one short follow-up question
+- Never mention tools, search, retrieval, or that you looked anything up`;
+
+const SEARCH_ENTRIES_TOOL = {
+  type: "function",
+  function: {
+    name: "search_entries",
+    description:
+      "Search the user's journal entries by keywords and/or date range. Returns matching entries with their full text and dates. Call this before answering any question about specific events, dates, or patterns.",
+    parameters: {
+      type: "object",
+      properties: {
+        keywords: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Words or short phrases to search for in entry text. Case-insensitive. Each keyword is matched independently (OR logic). Use synonyms or related terms if the first search returns nothing.",
+        },
+        date_from: {
+          type: "string",
+          description: "Start of date range, inclusive, in YYYY-MM-DD format.",
+        },
+        date_to: {
+          type: "string",
+          description: "End of date range, inclusive, in YYYY-MM-DD format.",
+        },
+        limit: {
+          type: "integer",
+          description: "Maximum entries to return. Defaults to 30, max 50.",
+          minimum: 1,
+          maximum: 50,
+        },
+      },
+      required: [],
+    },
+  },
+} as const;
 
 type OpenAIResponsesResponse = {
   output_text?: string;
@@ -117,17 +193,136 @@ export async function answerInsightQuestion(
   entries: EntryListItem[],
   messages: InsightChatMessage[],
   question: string,
-  timeframe: InsightTimeframe,
-) {
-  const { apiKey, model } = getInsightsConfig();
-  const answerChain = buildInsightAnswerChain(entries, messages, question, timeframe);
+): Promise<string> {
+  const { apiKey } = getInsightsConfig();
+  const model = process.env.EXPO_PUBLIC_OPENAI_CHAT_MODEL ?? DEFAULT_CHAT_MODEL;
 
-  return createInsightsResponse({
-    apiKey,
-    model,
-    instructions: answerChain.instructions,
-    input: answerChain.prompt,
-  });
+  const apiMessages: ChatApiMessage[] = [
+    { role: "system", content: CHAT_SYSTEM_PROMPT },
+    ...messages.map((m) => ({ role: m.role, content: m.content })),
+    { role: "user", content: question },
+  ];
+
+  return runChatAgentLoop(apiKey, model, entries, apiMessages);
+}
+
+function executeSearchEntries(
+  entries: EntryListItem[],
+  args: {
+    keywords?: string[];
+    date_from?: string;
+    date_to?: string;
+    limit?: number;
+  },
+): string {
+  let results = [...entries];
+
+  if (args.date_from) {
+    results = results.filter((e) => formatDayKey(e.createdAt) >= args.date_from!);
+  }
+
+  if (args.date_to) {
+    results = results.filter((e) => formatDayKey(e.createdAt) <= args.date_to!);
+  }
+
+  if (args.keywords?.length) {
+    results = results.filter((e) => {
+      const text = `${e.title} ${e.body}`.toLowerCase();
+      return args.keywords!.some((kw) => text.includes(kw.toLowerCase()));
+    });
+  }
+
+  results = results
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, args.limit ?? 30);
+
+  if (results.length === 0) {
+    return "No journal entries found matching these criteria.";
+  }
+
+  return results
+    .map((entry, i) => {
+      const weekday = new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(
+        entry.createdAt,
+      );
+      const header = [`[${i + 1}] ${formatCompactDate(entry.createdAt)} (${weekday})`];
+
+      if (entry.source === "walk") {
+        if (typeof entry.durationSec === "number") {
+          header.push(`${formatDuration(entry.durationSec)} walk`);
+        }
+
+        if (typeof entry.stepCount === "number") {
+          header.push(`${entry.stepCount} steps`);
+        }
+      }
+
+      const body = entry.body.trim() || "(empty entry)";
+      return `${header.join(" | ")}\n${body}`;
+    })
+    .join("\n\n");
+}
+
+async function runChatAgentLoop(
+  apiKey: string,
+  model: string,
+  entries: EntryListItem[],
+  initialMessages: ChatApiMessage[],
+): Promise<string> {
+  const messages = [...initialMessages];
+
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    const response = await fetch(OPENAI_CHAT_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        tools: [SEARCH_ENTRIES_TOOL],
+        tool_choice: "auto",
+      }),
+    });
+
+    const payload = (await response.json()) as ChatCompletionResponse;
+
+    if (!response.ok) {
+      const requestId = response.headers.get("x-request-id");
+      const errorMessage = payload.error?.message ?? "OpenAI request failed.";
+      throw new Error(requestId ? `${errorMessage} [request ${requestId}]` : errorMessage);
+    }
+
+    const choice = payload.choices[0];
+
+    if (!choice) {
+      throw new Error("OpenAI returned no choices.");
+    }
+
+    const assistantMessage = choice.message;
+    messages.push(assistantMessage);
+
+    if (choice.finish_reason !== "tool_calls" || !assistantMessage.tool_calls?.length) {
+      return (assistantMessage.content ?? "").trim();
+    }
+
+    for (const toolCall of assistantMessage.tool_calls) {
+      if (toolCall.function.name === "search_entries") {
+        const args = JSON.parse(toolCall.function.arguments) as {
+          keywords?: string[];
+          date_from?: string;
+          date_to?: string;
+          limit?: number;
+        };
+        const result = executeSearchEntries(entries, args);
+        messages.push({ role: "tool", tool_call_id: toolCall.id, content: result });
+      }
+    }
+  }
+
+  throw new Error("Chat agent exceeded maximum reasoning rounds.");
 }
 
 export async function generateDailyHomeCards(entries: EntryListItem[]) {
