@@ -191,11 +191,7 @@ export default function ProfileScreen() {
           label="Most active day"
           value={snapshot?.strongestDay ?? "No data yet"}
         />
-        <PatternRow
-          label="Topics on your mind"
-          value={snapshot?.topTopics.join(", ") || "No repeated topics yet"}
-        />
-        <PatternRow
+<PatternRow
           label="Strongest lenses"
           value={snapshot?.focusAreas.join(", ") || "No clear lens yet"}
         />
