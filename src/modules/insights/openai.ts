@@ -1,5 +1,5 @@
 import { formatCompactDate, formatDuration } from "../../lib/date";
-import type { EntryListItem } from "../journal/types";
+import type { EntryListItem, ExtractedPerson } from "../journal/types";
 import {
   buildInsightSnapshot,
   filterEntriesForTimeframe,
@@ -320,6 +320,179 @@ async function processBackfillQueue(
       backfillInFlight.delete(entry.id);
     }
   }
+}
+
+// ── People extraction ────────────────────────────────────────
+
+const peopleBackfillInFlight = new Set<string>();
+
+export async function extractPeopleFromEntry(
+  entry: EntryListItem,
+  existingPeople: { id: string; name: string; aliases: string[] }[],
+): Promise<ExtractedPerson[]> {
+  const { apiKey, model } = getInsightsConfig();
+
+  const peopleContext =
+    existingPeople.length > 0
+      ? existingPeople
+          .map(
+            (p) =>
+              `ID:${p.id} Name:"${p.name}"${p.aliases.length > 0 ? ` Aliases:${p.aliases.map((a) => `"${a}"`).join(",")}` : ""}`,
+          )
+          .join("\n")
+      : "No existing people yet.";
+
+  const prompt = [
+    "Extract all people mentioned in this journal entry.",
+    "Return JSON only.",
+    'Use this shape: [{"name":"","existingPersonId":null}].',
+    "Rules:",
+    "- name: the name as used in the text.",
+    "- existingPersonId: if the person matches an existing one (considering aliases), use their ID. Otherwise null.",
+    "- Skip group references without individual names (e.g. 'the team', 'everyone').",
+    "- Skip generic relationship terms without a name (e.g. 'a friend', 'someone').",
+    "- If no people are mentioned, return an empty array [].",
+    "",
+    "Existing people:",
+    peopleContext,
+    "",
+    "Journal entry:",
+    entry.body,
+  ].join("\n");
+
+  const response = await createInsightsResponse({
+    apiKey,
+    model,
+    instructions:
+      "You extract people names from journal entries and match them to existing records. Output valid JSON only.",
+    input: prompt,
+  });
+
+  return parsePeopleExtraction(response);
+}
+
+function parsePeopleExtraction(responseText: string): ExtractedPerson[] {
+  const normalized = responseText.trim();
+  const jsonText = normalized.startsWith("```")
+    ? normalized.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")
+    : normalized;
+
+  const parsed = JSON.parse(jsonText) as unknown;
+
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+
+  return parsed
+    .filter(
+      (item: unknown): item is { name: string; existingPersonId: string | null } =>
+        typeof item === "object" &&
+        item !== null &&
+        typeof (item as Record<string, unknown>).name === "string" &&
+        (item as Record<string, unknown>).name !== "",
+    )
+    .map((item) => ({
+      name: item.name.trim().slice(0, 80),
+      existingPersonId: typeof item.existingPersonId === "string" ? item.existingPersonId : null,
+    }));
+}
+
+export async function generatePersonSummary(
+  personName: string,
+  aliases: string[],
+  entries: EntryListItem[],
+): Promise<{ summary: string; emoji: string } | null> {
+  if (entries.length === 0) return null;
+
+  const { apiKey, model } = getInsightsConfig();
+
+  const context = entries
+    .slice(0, 10)
+    .map(
+      (e, i) =>
+        `${i + 1}. ${formatCompactDate(e.createdAt)}: ${e.body.trim().slice(0, 300)}`,
+    )
+    .join("\n\n");
+
+  const prompt = [
+    `Write a one-line description and pick an emoji for "${personName}"${aliases.length > 0 ? ` (also known as: ${aliases.join(", ")})` : ""}.`,
+    'Return JSON only: {"summary":"","emoji":""}.',
+    "Rules:",
+    "- summary: max 12 words. Be specific: relationship, shared activities, context.",
+    "- emoji: one emoji that represents this person's role in the author's life.",
+    "- Good examples: 'Your wife. SoulCycle partner.', 'College friend. Beach day regular.'",
+    "",
+    "Journal entries mentioning this person:",
+    context,
+  ].join("\n");
+
+  const response = await createInsightsResponse({
+    apiKey,
+    model,
+    instructions:
+      "You write concise person descriptions for a journal app. Output valid JSON only.",
+    input: prompt,
+  });
+
+  try {
+    const normalized = response.trim();
+    const jsonText = normalized.startsWith("```")
+      ? normalized.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")
+      : normalized;
+    const parsed = JSON.parse(jsonText) as { summary?: string; emoji?: string };
+    return {
+      summary: typeof parsed.summary === "string" ? parsed.summary.trim().slice(0, 120) : "",
+      emoji: typeof parsed.emoji === "string" ? parsed.emoji.trim().slice(0, 8) : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function backfillPeople(
+  entries: EntryListItem[],
+  getExistingPeople: () => Promise<{ id: string; name: string; aliases: string[] }[]>,
+  onExtracted: (entryId: string, people: ExtractedPerson[]) => Promise<void>,
+  onAllDone: () => void,
+) {
+  if (!hasInsightsConfig()) return;
+
+  const candidates = entries.filter(
+    (entry) =>
+      entry.body.trim().length > 0 && !peopleBackfillInFlight.has(entry.id),
+  );
+
+  if (candidates.length === 0) {
+    onAllDone();
+    return;
+  }
+
+  void processPeopleBackfillQueue(candidates, getExistingPeople, onExtracted, onAllDone);
+}
+
+async function processPeopleBackfillQueue(
+  entries: EntryListItem[],
+  getExistingPeople: () => Promise<{ id: string; name: string; aliases: string[] }[]>,
+  onExtracted: (entryId: string, people: ExtractedPerson[]) => Promise<void>,
+  onAllDone: () => void,
+) {
+  for (const entry of entries) {
+    if (peopleBackfillInFlight.has(entry.id)) continue;
+
+    peopleBackfillInFlight.add(entry.id);
+
+    try {
+      const existingPeople = await getExistingPeople();
+      const extracted = await extractPeopleFromEntry(entry, existingPeople);
+      await onExtracted(entry.id, extracted);
+    } catch (error) {
+      console.error("People backfill failed for", entry.id, error);
+    } finally {
+      peopleBackfillInFlight.delete(entry.id);
+    }
+  }
+
+  onAllDone();
 }
 
 export function peekCachedDailyHomeCards(entries: EntryListItem[]) {

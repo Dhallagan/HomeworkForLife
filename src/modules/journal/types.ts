@@ -41,6 +41,27 @@ export type DailySummary = {
   latestEntryPreview: string | null;
 };
 
+export type Person = {
+  id: string;
+  name: string;
+  aliases: string[];
+  emoji?: string;
+  summary?: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PersonListItem = Person & {
+  entryCount: number;
+};
+
+export type ExtractedPerson = {
+  name: string;
+  existingPersonId: string | null;
+};
+
 export type JournalExportEntry = {
   id: string;
   createdAt: string;

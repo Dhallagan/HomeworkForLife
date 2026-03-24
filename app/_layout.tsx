@@ -35,6 +35,7 @@ export default function RootLayout() {
         />
         <Stack.Screen name="day/[date]" options={{ title: "Day" }} />
         <Stack.Screen name="entry/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="person/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="profile" options={{ title: "Profile" }} />
         <Stack.Screen name="settings" options={{ title: "Settings" }} />
       </Stack>

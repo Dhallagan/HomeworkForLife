@@ -3,11 +3,14 @@ import type { SQLiteDatabase } from "expo-sqlite";
 import { formatDayKey, formatEntryTitle } from "../../lib/date";
 import type {
   DailySteps,
+  ExtractedPerson,
   JournalExportData,
   DailySummary,
   EntryDetail,
   EntryListItem,
   JournalEntry,
+  Person,
+  PersonListItem,
   WalkSession,
 } from "./types";
 
@@ -64,6 +67,26 @@ export async function initializeDatabase(db: SQLiteDatabase) {
     );
   `);
 
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS people (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      aliases TEXT DEFAULT '[]',
+      emoji TEXT,
+      summary TEXT,
+      first_seen_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS people_entries (
+      person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+      entry_id TEXT NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
+      PRIMARY KEY (person_id, entry_id)
+    );
+  `);
+
   const journalColumns = await db.getAllAsync<{ name: string }>(
     "PRAGMA table_info(journal_entries)",
   );
@@ -72,6 +95,13 @@ export async function initializeDatabase(db: SQLiteDatabase) {
     await db.execAsync(`
       ALTER TABLE journal_entries
       ADD COLUMN title_emoji TEXT;
+    `);
+  }
+
+  if (!journalColumns.some((column) => column.name === "people_extracted_at")) {
+    await db.execAsync(`
+      ALTER TABLE journal_entries
+      ADD COLUMN people_extracted_at TEXT;
     `);
   }
 }
@@ -254,6 +284,45 @@ export async function deleteEntry(db: SQLiteDatabase, id: string) {
   });
 }
 
+export async function getAdjacentEntryIds(
+  db: SQLiteDatabase,
+  currentId: string,
+): Promise<{ prevId: string | null; nextId: string | null }> {
+  const currentEntry = await db.getFirstAsync<{ created_at: string }>(
+    `SELECT created_at FROM journal_entries WHERE id = ?`,
+    currentId,
+  );
+
+  if (!currentEntry) {
+    return { prevId: null, nextId: null };
+  }
+
+  const prev = await db.getFirstAsync<{ id: string }>(
+    `SELECT id FROM journal_entries
+     WHERE created_at < ? OR (created_at = ? AND id < ?)
+     ORDER BY created_at DESC, id DESC
+     LIMIT 1`,
+    currentEntry.created_at,
+    currentEntry.created_at,
+    currentId,
+  );
+
+  const next = await db.getFirstAsync<{ id: string }>(
+    `SELECT id FROM journal_entries
+     WHERE created_at > ? OR (created_at = ? AND id > ?)
+     ORDER BY created_at ASC, id ASC
+     LIMIT 1`,
+    currentEntry.created_at,
+    currentEntry.created_at,
+    currentId,
+  );
+
+  return {
+    prevId: next?.id ?? null,
+    nextId: prev?.id ?? null,
+  };
+}
+
 export async function upsertDailySteps(
   db: SQLiteDatabase,
   dailySteps: DailySteps,
@@ -406,6 +475,313 @@ function countWords(body: string) {
     .trim()
     .split(/\s+/)
     .filter(Boolean).length;
+}
+
+// ── People CRUD ──────────────────────────────────────────────
+
+export async function listPeople(db: SQLiteDatabase): Promise<PersonListItem[]> {
+  const rows = await db.getAllAsync<{
+    id: string;
+    name: string;
+    aliases: string;
+    emoji: string | null;
+    summary: string | null;
+    first_seen_at: string;
+    last_seen_at: string;
+    created_at: string;
+    updated_at: string;
+    entry_count: number;
+  }>(`
+    SELECT p.*, COUNT(pe.entry_id) as entry_count
+    FROM people p
+    LEFT JOIN people_entries pe ON p.id = pe.person_id
+    GROUP BY p.id
+    ORDER BY entry_count DESC, p.last_seen_at DESC
+  `);
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    aliases: JSON.parse(row.aliases || "[]"),
+    emoji: row.emoji ?? undefined,
+    summary: row.summary ?? undefined,
+    firstSeenAt: row.first_seen_at,
+    lastSeenAt: row.last_seen_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    entryCount: row.entry_count,
+  }));
+}
+
+export async function getPersonById(
+  db: SQLiteDatabase,
+  id: string,
+): Promise<PersonListItem | null> {
+  const row = await db.getFirstAsync<{
+    id: string;
+    name: string;
+    aliases: string;
+    emoji: string | null;
+    summary: string | null;
+    first_seen_at: string;
+    last_seen_at: string;
+    created_at: string;
+    updated_at: string;
+  }>(`SELECT * FROM people WHERE id = ? LIMIT 1`, id);
+
+  if (!row) return null;
+
+  const countRow = await db.getFirstAsync<{ c: number }>(
+    `SELECT COUNT(*) as c FROM people_entries WHERE person_id = ?`,
+    id,
+  );
+
+  return {
+    id: row.id,
+    name: row.name,
+    aliases: JSON.parse(row.aliases || "[]"),
+    emoji: row.emoji ?? undefined,
+    summary: row.summary ?? undefined,
+    firstSeenAt: row.first_seen_at,
+    lastSeenAt: row.last_seen_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    entryCount: countRow?.c ?? 0,
+  };
+}
+
+export async function getEntriesForPerson(
+  db: SQLiteDatabase,
+  personId: string,
+): Promise<EntryListItem[]> {
+  const rows = await db.getAllAsync<EntryRow>(
+    `
+    SELECT
+      je.id, je.created_at, je.source, je.title, je.title_emoji,
+      je.body, je.session_id,
+      ws.started_at, ws.ended_at, ws.duration_sec, ws.step_count
+    FROM people_entries pe
+    JOIN journal_entries je ON je.id = pe.entry_id
+    LEFT JOIN walk_sessions ws ON ws.entry_id = je.id
+    WHERE pe.person_id = ?
+    ORDER BY je.created_at DESC
+    `,
+    personId,
+  );
+
+  return rows.map(mapEntryRow);
+}
+
+export async function getExistingPeopleContext(
+  db: SQLiteDatabase,
+): Promise<{ id: string; name: string; aliases: string[] }[]> {
+  const rows = await db.getAllAsync<{
+    id: string;
+    name: string;
+    aliases: string;
+  }>(`
+    SELECT p.id, p.name, p.aliases
+    FROM people p
+    LEFT JOIN people_entries pe ON p.id = pe.person_id
+    GROUP BY p.id
+    ORDER BY COUNT(pe.entry_id) DESC
+    LIMIT 50
+  `);
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    aliases: JSON.parse(row.aliases || "[]"),
+  }));
+}
+
+export async function linkPeopleToEntry(
+  db: SQLiteDatabase,
+  entryId: string,
+  extractedPeople: ExtractedPerson[],
+): Promise<void> {
+  if (extractedPeople.length === 0) return;
+
+  const now = new Date().toISOString();
+  const entryRow = await db.getFirstAsync<{ created_at: string }>(
+    `SELECT created_at FROM journal_entries WHERE id = ?`,
+    entryId,
+  );
+  const entryDate = entryRow?.created_at ?? now;
+
+  await db.withTransactionAsync(async () => {
+    for (const person of extractedPeople) {
+      let personId = person.existingPersonId;
+
+      if (personId) {
+        const exists = await db.getFirstAsync<{ id: string }>(
+          `SELECT id FROM people WHERE id = ?`,
+          personId,
+        );
+        if (!exists) personId = null;
+      }
+
+      if (!personId) {
+        personId = createId("person");
+        await db.runAsync(
+          `INSERT INTO people (id, name, aliases, emoji, summary, first_seen_at, last_seen_at, created_at, updated_at)
+           VALUES (?, ?, '[]', NULL, NULL, ?, ?, ?, ?)`,
+          personId,
+          person.name,
+          entryDate,
+          entryDate,
+          now,
+          now,
+        );
+      } else {
+        await db.runAsync(
+          `UPDATE people SET last_seen_at = MAX(last_seen_at, ?), updated_at = ? WHERE id = ?`,
+          entryDate,
+          now,
+          personId,
+        );
+      }
+
+      await db.runAsync(
+        `INSERT OR IGNORE INTO people_entries (person_id, entry_id) VALUES (?, ?)`,
+        personId,
+        entryId,
+      );
+    }
+
+    await db.runAsync(
+      `UPDATE journal_entries SET people_extracted_at = ? WHERE id = ?`,
+      now,
+      entryId,
+    );
+  });
+}
+
+export async function getEntriesNeedingPeopleExtraction(
+  db: SQLiteDatabase,
+): Promise<EntryListItem[]> {
+  const rows = await db.getAllAsync<EntryRow>(`
+    SELECT
+      je.id, je.created_at, je.source, je.title, je.title_emoji,
+      je.body, je.session_id,
+      ws.started_at, ws.ended_at, ws.duration_sec, ws.step_count
+    FROM journal_entries je
+    LEFT JOIN walk_sessions ws ON ws.entry_id = je.id
+    WHERE je.people_extracted_at IS NULL
+      AND length(trim(je.body)) > 0
+    ORDER BY je.created_at ASC
+  `);
+
+  return rows.map(mapEntryRow);
+}
+
+export async function updatePerson(
+  db: SQLiteDatabase,
+  id: string,
+  updates: { name?: string; emoji?: string; summary?: string; aliases?: string[] },
+): Promise<void> {
+  const sets: string[] = [];
+  const values: (string | null)[] = [];
+
+  if (updates.name !== undefined) {
+    sets.push("name = ?");
+    values.push(updates.name);
+  }
+  if (updates.emoji !== undefined) {
+    sets.push("emoji = ?");
+    values.push(updates.emoji || null);
+  }
+  if (updates.summary !== undefined) {
+    sets.push("summary = ?");
+    values.push(updates.summary || null);
+  }
+  if (updates.aliases !== undefined) {
+    sets.push("aliases = ?");
+    values.push(JSON.stringify(updates.aliases));
+  }
+
+  if (sets.length === 0) return;
+
+  sets.push("updated_at = ?");
+  values.push(new Date().toISOString());
+  values.push(id);
+
+  await db.runAsync(
+    `UPDATE people SET ${sets.join(", ")} WHERE id = ?`,
+    ...values,
+  );
+}
+
+export async function mergePeople(
+  db: SQLiteDatabase,
+  sourceId: string,
+  targetId: string,
+): Promise<void> {
+  if (sourceId === targetId) return;
+
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `UPDATE OR IGNORE people_entries SET person_id = ? WHERE person_id = ?`,
+      targetId,
+      sourceId,
+    );
+
+    await db.runAsync(
+      `DELETE FROM people_entries WHERE person_id = ?`,
+      sourceId,
+    );
+
+    const source = await db.getFirstAsync<{ name: string; aliases: string }>(
+      `SELECT name, aliases FROM people WHERE id = ?`,
+      sourceId,
+    );
+    if (source) {
+      const target = await db.getFirstAsync<{ aliases: string }>(
+        `SELECT aliases FROM people WHERE id = ?`,
+        targetId,
+      );
+      const existingAliases: string[] = JSON.parse(target?.aliases || "[]");
+      const sourceAliases: string[] = JSON.parse(source.aliases || "[]");
+      const merged = [...new Set([...existingAliases, source.name, ...sourceAliases])];
+      await db.runAsync(
+        `UPDATE people SET aliases = ? WHERE id = ?`,
+        JSON.stringify(merged),
+        targetId,
+      );
+    }
+
+    const dates = await db.getFirstAsync<{ min_date: string; max_date: string }>(
+      `SELECT
+         MIN(je.created_at) as min_date,
+         MAX(je.created_at) as max_date
+       FROM people_entries pe
+       JOIN journal_entries je ON je.id = pe.entry_id
+       WHERE pe.person_id = ?`,
+      targetId,
+    );
+
+    if (dates) {
+      await db.runAsync(
+        `UPDATE people SET first_seen_at = ?, last_seen_at = ?, updated_at = ? WHERE id = ?`,
+        dates.min_date,
+        dates.max_date,
+        new Date().toISOString(),
+        targetId,
+      );
+    }
+
+    await db.runAsync(`DELETE FROM people WHERE id = ?`, sourceId);
+  });
+}
+
+export async function deletePerson(
+  db: SQLiteDatabase,
+  id: string,
+): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(`DELETE FROM people_entries WHERE person_id = ?`, id);
+    await db.runAsync(`DELETE FROM people WHERE id = ?`, id);
+  });
 }
 
 function mapEntryRow(row: EntryRow): EntryDetail {

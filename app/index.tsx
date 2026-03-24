@@ -11,11 +11,12 @@ import {
 import HomeScreen from "../src/modules/home";
 import InsightsScreen from "../src/modules/insights/insights-screen";
 import EntriesScreen from "../src/modules/journal/entries-screen";
+import PeopleScreen from "../src/modules/people/people-screen";
 import { colors } from "../src/theme";
 
-type PageName = "insights" | "home" | "entries";
+type PageName = "insights" | "home" | "entries" | "people";
 
-const PAGE_ORDER: PageName[] = ["insights", "home", "entries"];
+const PAGE_ORDER: PageName[] = ["insights", "home", "entries", "people"];
 
 export default function RootPagerScreen() {
   const scrollRef = useRef<ScrollView | null>(null);
@@ -85,6 +86,9 @@ export default function RootPagerScreen() {
         </View>
         <View style={[styles.page, { width }]}>
           <EntriesScreen />
+        </View>
+        <View style={[styles.page, { width }]}>
+          <PeopleScreen />
         </View>
       </ScrollView>
 

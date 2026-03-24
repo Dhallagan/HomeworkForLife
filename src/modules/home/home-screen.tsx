@@ -17,12 +17,24 @@ import { PaperRecordButton } from "../../components/notebook";
 import { formatLongDay } from "../../lib/date";
 import {
   backfillMissingTitles,
+  backfillPeople,
   generateDailyHomeCards,
+  generatePersonSummary,
   hasInsightsConfig,
   peekCachedDailyHomeCards,
   type DailyHomeCards,
 } from "../insights/openai";
-import { listEntries, updateEntry, upsertDailySteps } from "../journal/repository";
+import {
+  getEntriesForPerson,
+  getEntriesNeedingPeopleExtraction,
+  getExistingPeopleContext,
+  linkPeopleToEntry,
+  listEntries,
+  listPeople,
+  updateEntry,
+  updatePerson,
+  upsertDailySteps,
+} from "../journal/repository";
 import type { EntryListItem } from "../journal/types";
 import {
   getTodayStepSnapshot,
@@ -145,6 +157,10 @@ export default function HomeScreen({
           body: nextEntries.find((e) => e.id === entryId)?.body ?? "",
         });
       });
+
+      if (aiReady) {
+        void runPeopleBackfill();
+      }
     } catch (error) {
       console.error("Failed to load Home", error);
       startTransition(() => {
@@ -169,6 +185,44 @@ export default function HomeScreen({
       console.error("Failed to load daily home cards", error);
     }
   }, []);
+
+  const runPeopleBackfill = useCallback(async () => {
+    try {
+      const needsExtraction = await getEntriesNeedingPeopleExtraction(db);
+      if (needsExtraction.length === 0) return;
+
+      backfillPeople(
+        needsExtraction,
+        () => getExistingPeopleContext(db),
+        async (entryId, extracted) => {
+          if (extracted.length > 0) {
+            await linkPeopleToEntry(db, entryId, extracted);
+          }
+        },
+        async () => {
+          try {
+            const allPeople = await listPeople(db);
+            for (const person of allPeople) {
+              if (!person.summary) {
+                const entries = await getEntriesForPerson(db, person.id);
+                const result = await generatePersonSummary(person.name, person.aliases, entries);
+                if (result) {
+                  await updatePerson(db, person.id, {
+                    summary: result.summary,
+                    emoji: result.emoji,
+                  });
+                }
+              }
+            }
+          } catch (error) {
+            console.error("People summary generation failed", error);
+          }
+        },
+      );
+    } catch (error) {
+      console.error("People backfill failed", error);
+    }
+  }, [db]);
 
   useFocusEffect(
     useCallback(() => {
