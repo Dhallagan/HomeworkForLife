@@ -13,7 +13,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { formatLongDay } from "../../lib/date";
+import { formatDayKey, formatLongDay } from "../../lib/date";
 import { deleteEntry, listDailySummaries, listEntries } from "./repository";
 import type { DailySummary, EntryListItem } from "./types";
 import { colors } from "../../theme";
@@ -300,7 +300,7 @@ function groupEntriesByDay(entries: EntryListItem[]) {
   const grouped: Record<string, EntryListItem[]> = {};
 
   for (const entry of entries) {
-    const dayKey = entry.createdAt.toISOString().slice(0, 10);
+    const dayKey = formatDayKey(entry.createdAt);
 
     if (!grouped[dayKey]) {
       grouped[dayKey] = [];

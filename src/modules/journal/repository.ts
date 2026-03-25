@@ -347,8 +347,8 @@ export async function getAdjacentEntryIds(
   );
 
   return {
-    prevId: next?.id ?? null,
-    nextId: prev?.id ?? null,
+    prevId: prev?.id ?? null,
+    nextId: next?.id ?? null,
   };
 }
 
@@ -837,11 +837,13 @@ export async function loadChatMessages(
     content: string;
   }>(`SELECT id, role, content FROM chat_messages ORDER BY created_at ASC`);
 
-  return rows.map((row) => ({
-    id: row.id,
-    role: row.role as "user" | "assistant",
-    content: row.content,
-  }));
+  return rows
+    .filter((row) => row.role === "user" || row.role === "assistant")
+    .map((row) => ({
+      id: row.id,
+      role: row.role as "user" | "assistant",
+      content: row.content,
+    }));
 }
 
 export async function clearChatMessages(db: SQLiteDatabase): Promise<void> {

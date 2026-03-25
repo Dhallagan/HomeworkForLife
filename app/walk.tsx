@@ -161,14 +161,16 @@ export default function WalkScreen() {
 
       if (entry) {
         if (hasInsightsConfig() && session.transcript.trim()) {
-          void generateEntryTitle(entry).then((titlePackage) => {
-            void updateEntryTitle(db, entry.id, {
-              title: titlePackage.title || entry.title,
-              titleEmoji: titlePackage.emoji || "",
+          void generateEntryTitle(entry)
+            .then((titlePackage) =>
+              updateEntryTitle(db, entry.id, {
+                title: titlePackage.title || entry.title,
+                titleEmoji: titlePackage.emoji || "",
+              }),
+            )
+            .catch((error) => {
+              console.error("Auto-generate walk title failed", error);
             });
-          }).catch((error) => {
-            console.error("Auto-generate walk title failed", error);
-          });
         }
 
         router.replace(`/entry/${entry.id}`);

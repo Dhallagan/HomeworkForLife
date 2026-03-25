@@ -197,9 +197,11 @@ export async function answerInsightQuestion(
   const { apiKey } = getInsightsConfig();
   const model = process.env.EXPO_PUBLIC_OPENAI_CHAT_MODEL ?? DEFAULT_CHAT_MODEL;
 
+  const MAX_HISTORY_MESSAGES = 40;
+  const recentMessages = messages.slice(-MAX_HISTORY_MESSAGES);
   const apiMessages: ChatApiMessage[] = [
     { role: "system", content: CHAT_SYSTEM_PROMPT },
-    ...messages.map((m) => ({ role: m.role, content: m.content })),
+    ...recentMessages.map((m) => ({ role: m.role, content: m.content })),
     { role: "user", content: question },
   ];
 
@@ -234,7 +236,7 @@ function executeSearchEntries(
 
   results = results
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    .slice(0, args.limit ?? 30);
+    .slice(0, Math.min(50, args.limit ?? 30));
 
   if (results.length === 0) {
     return "No journal entries found matching these criteria.";
@@ -304,20 +306,36 @@ async function runChatAgentLoop(
     const assistantMessage = choice.message;
     messages.push(assistantMessage);
 
+    if (choice.finish_reason === "length") {
+      return "My response was too long to complete. Try asking a more specific question.";
+    }
+
     if (choice.finish_reason !== "tool_calls" || !assistantMessage.tool_calls?.length) {
       return (assistantMessage.content ?? "").trim();
     }
 
     for (const toolCall of assistantMessage.tool_calls) {
       if (toolCall.function.name === "search_entries") {
-        const args = JSON.parse(toolCall.function.arguments) as {
-          keywords?: string[];
-          date_from?: string;
-          date_to?: string;
-          limit?: number;
-        };
+        let args: { keywords?: string[]; date_from?: string; date_to?: string; limit?: number };
+        try {
+          args = JSON.parse(toolCall.function.arguments) as typeof args;
+        } catch {
+          messages.push({
+            role: "tool",
+            tool_call_id: toolCall.id,
+            content: "Error: could not parse tool arguments.",
+          });
+          continue;
+        }
         const result = executeSearchEntries(entries, args);
         messages.push({ role: "tool", tool_call_id: toolCall.id, content: result });
+      } else {
+        // Unknown tool — return an error result to satisfy the API protocol.
+        messages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: `Unknown tool: ${toolCall.function.name}`,
+        });
       }
     }
   }
@@ -740,9 +758,6 @@ async function createInsightsResponse({
     },
     body: JSON.stringify({
       model,
-      reasoning: {
-        effort: "low",
-      },
       instructions,
       input,
     }),
