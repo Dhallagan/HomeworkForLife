@@ -304,7 +304,9 @@ export default function SettingsScreen() {
             detail={healthStatus === "granted" && healthPreviewSteps !== null
               ? `${healthPreviewSteps.toLocaleString()} steps`
               : undefined}
-            value={formatStatus(healthStatus)}
+            value={healthStatus === "granted"
+              ? selectedStepSource === "apple-health" ? "\u2713 Active" : "Use"
+              : formatStatus(healthStatus)}
             onPress={healthAction}
           />
           <View style={styles.separator} />
@@ -313,7 +315,9 @@ export default function SettingsScreen() {
             detail={fitbitStatus === "granted" && fitbitPreviewSteps !== null
               ? `${fitbitPreviewSteps.toLocaleString()} steps`
               : undefined}
-            value={formatFitbitStatus(fitbitStatus, fitbitConfigured, fitbitSyncStatus)}
+            value={fitbitStatus === "granted"
+              ? selectedStepSource === "fitbit" ? "\u2713 Active" : "Use"
+              : formatFitbitStatus(fitbitStatus, fitbitConfigured, fitbitSyncStatus)}
             onPress={fitbitAction}
           />
           <View style={styles.separator} />

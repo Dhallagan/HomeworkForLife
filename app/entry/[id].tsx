@@ -311,7 +311,7 @@ export default function EntryDetailScreen() {
               disabled={!editing}
             >
               <Text style={[styles.dateTitle, editing && styles.dateTitleEditable]}>
-                {formatLongDay(entry.createdAt)}
+                {formatCompactDate(entry.createdAt)}
               </Text>
             </Pressable>
             <Pressable
@@ -346,7 +346,8 @@ export default function EntryDetailScreen() {
           />
         ) : null}
         <Text style={styles.metaText}>
-          {formatEntryTime(entry.createdAt)}
+          {entry.createdAt.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()}
+          {"  ·  "}{formatEntryTime(entry.createdAt)}
           {entry.source === "walk" ? `  ·  ${formatWalkMeta(entry)}` : ""}
         </Text>
       </View>

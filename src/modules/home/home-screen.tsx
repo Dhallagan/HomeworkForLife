@@ -395,21 +395,27 @@ export default function HomeScreen({
           contentContainerStyle={styles.bodyContent}
           keyboardShouldPersistTaps="handled"
         >
-          <Pressable
-            disabled={!todayOverview.latestEntryRoute}
-            onPress={handleOpenLatestEntry}
-            style={({ pressed }) => [
-              styles.statusLine,
-              pressed && todayOverview.latestEntryRoute && styles.statusLinePressed,
-            ]}
-          >
-            <Text style={styles.statusText}>
-              {todayOverview.journalDetail}
-              {todayOverview.stepsValue !== "--" && todayOverview.stepsValue !== "Off" && todayOverview.stepsValue !== "N/A"
-                ? `  ·  ${todayOverview.stepsValue} steps`
-                : ""}
-            </Text>
-          </Pressable>
+          <View style={styles.summaryRow}>
+            <Pressable
+              disabled={!todayOverview.latestEntryRoute}
+              onPress={handleOpenLatestEntry}
+              style={({ pressed }) => [
+                styles.summaryCard,
+                styles.summaryCardLeft,
+                pressed && todayOverview.latestEntryRoute && styles.summaryCardPressed,
+              ]}
+            >
+              <Text style={styles.summaryLabel}>Journal</Text>
+              <Text style={styles.summaryValue}>{todayOverview.journalValue}</Text>
+              <Text style={styles.summaryDetail}>{todayOverview.journalDetail}</Text>
+            </Pressable>
+            <View style={styles.summaryDivider} />
+            <View style={[styles.summaryCard, styles.summaryCardRight]}>
+              <Text style={styles.summaryLabel}>Steps</Text>
+              <Text style={styles.summaryValue}>{todayOverview.stepsValue}</Text>
+              <Text style={styles.summaryDetail}>{todayOverview.stepsDetail}</Text>
+            </View>
+          </View>
 
           <View style={styles.cardsStack}>
             {homeCards.map((card) => (
@@ -778,19 +784,55 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     paddingBottom: 12,
     gap: 16,
   },
-  statusLine: {
-    paddingHorizontal: 18,
-    paddingVertical: 4,
+  summaryRow: {
+    flexDirection: "row",
+    minHeight: 110,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    marginHorizontal: 18,
   },
-  statusLinePressed: {
-    opacity: 0.6,
+  summaryCard: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 14,
+    gap: 6,
   },
-  statusText: {
+  summaryCardLeft: {
+    borderTopLeftRadius: 20,
+    borderBottomLeftRadius: 20,
+  },
+  summaryCardRight: {
+    borderTopRightRadius: 20,
+    borderBottomRightRadius: 20,
+  },
+  summaryCardPressed: {
+    backgroundColor: colors.accentSoft,
+  },
+  summaryDivider: {
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: colors.rule,
+  },
+  summaryLabel: {
     color: colors.muted,
     fontSize: 11,
     letterSpacing: 1.2,
     fontFamily: "Courier",
     textTransform: "uppercase",
+  },
+  summaryValue: {
+    color: colors.text,
+    fontSize: 24,
+    lineHeight: 28,
+    fontWeight: "300",
+    letterSpacing: -0.6,
+  },
+  summaryDetail: {
+    color: colors.muted,
+    fontSize: 14,
+    lineHeight: 20,
   },
   cardsStack: {
     paddingHorizontal: 18,

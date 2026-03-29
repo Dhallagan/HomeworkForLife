@@ -1,5 +1,6 @@
-import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   Animated,
   PanResponder,
   Pressable,
@@ -27,8 +28,6 @@ export default function EntriesScreen() {
   const [allEntries, setAllEntries] = useState<EntryListItem[]>([]);
   const [entriesByDay, setEntriesByDay] = useState<Record<string, EntryListItem[]>>({});
   const [searchQuery, setSearchQuery] = useState("");
-  const [pendingDelete, setPendingDelete] = useState<EntryListItem | null>(null);
-  const pendingDeleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const openRowRef = useRef<{ close: () => void } | null>(null);
 
   const loadDays = useCallback(async () => {
@@ -56,70 +55,41 @@ export default function EntriesScreen() {
     }, [loadDays]),
   );
 
-  const filteredEntries = useMemo(() => {
-    if (!pendingDelete) return allEntries;
-    return allEntries.filter((entry) => entry.id !== pendingDelete.id);
-  }, [allEntries, pendingDelete]);
-
-  const filteredEntriesByDay = useMemo(
-    () => groupEntriesByDay(filteredEntries),
-    [filteredEntries],
-  );
-
   const searchResults = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return null;
 
-    const matches = filteredEntries.filter((entry) => {
+    const matches = allEntries.filter((entry) => {
       const text = `${entry.title} ${entry.titleEmoji ?? ""} ${entry.body}`.toLowerCase();
       return text.includes(query);
     });
 
     return groupEntriesByDay(matches);
-  }, [filteredEntries, searchQuery]);
+  }, [allEntries, searchQuery]);
 
   const isSearching = searchQuery.trim().length > 0;
   const visibleDays = isSearching
     ? days.filter((day) => searchResults && searchResults[day.date]?.length)
     : days;
-  const visibleEntriesByDay = isSearching && searchResults ? searchResults : filteredEntriesByDay;
+  const visibleEntriesByDay = isSearching && searchResults ? searchResults : entriesByDay;
 
   function handleRowOpen(handle: { close: () => void }) {
     openRowRef.current?.close();
     openRowRef.current = handle;
   }
 
-  useEffect(() => {
-    return () => {
-      if (pendingDeleteTimer.current) {
-        clearTimeout(pendingDeleteTimer.current);
-      }
-    };
-  }, []);
-
   function handleDelete(entry: EntryListItem) {
-    if (pendingDeleteTimer.current) {
-      clearTimeout(pendingDeleteTimer.current);
-      if (pendingDelete) {
-        void deleteEntry(db, pendingDelete.id);
-      }
-    }
-
-    setPendingDelete(entry);
-    pendingDeleteTimer.current = setTimeout(async () => {
-      await deleteEntry(db, entry.id);
-      setPendingDelete(null);
-      pendingDeleteTimer.current = null;
-      void loadDays();
-    }, 4000);
-  }
-
-  function handleUndo() {
-    if (pendingDeleteTimer.current) {
-      clearTimeout(pendingDeleteTimer.current);
-      pendingDeleteTimer.current = null;
-    }
-    setPendingDelete(null);
+    Alert.alert("Delete Entry", `"${entry.title}" will be permanently removed.`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          await deleteEntry(db, entry.id);
+          void loadDays();
+        },
+      },
+    ]);
   }
 
   return (
@@ -205,23 +175,6 @@ export default function EntriesScreen() {
           ) : null}
         </ScrollView>
 
-        {pendingDelete ? (
-          <View style={styles.undoToast}>
-            <Text style={styles.undoToastText} numberOfLines={1}>
-              Deleted "{pendingDelete.title}"
-            </Text>
-            <Pressable
-              hitSlop={8}
-              onPress={handleUndo}
-              style={({ pressed }) => [
-                styles.undoButton,
-                pressed && styles.undoButtonPressed,
-              ]}
-            >
-              <Text style={styles.undoButtonText}>Undo</Text>
-            </Pressable>
-          </View>
-        ) : null}
       </View>
     </SafeAreaView>
   );
