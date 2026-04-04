@@ -295,6 +295,12 @@ export default function EntryDetailScreen() {
     createdAt: Date,
   ) {
     try {
+      // Only extract once per entry
+      const row = await db.getFirstAsync<{ tasks_extracted_at: string | null }>(
+        `SELECT tasks_extracted_at FROM journal_entries WHERE id = ?`, entryId,
+      );
+      if (row?.tasks_extracted_at) return;
+
       const extracted = await extractTasksFromEntry({
         id: entryId,
         createdAt,
@@ -307,9 +313,7 @@ export default function EntryDetailScreen() {
         await createTask(db, entryId, task.title, task.timeframe);
       }
 
-      if (extracted.length > 0) {
-        await markTasksExtracted(db, entryId);
-      }
+      await markTasksExtracted(db, entryId);
     } catch (error) {
       console.error("Auto-extract tasks failed", error);
     }

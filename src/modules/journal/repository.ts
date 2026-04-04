@@ -440,12 +440,19 @@ export async function createTask(
   title: string,
   timeframe: string | null,
 ) {
+  // Deduplicate: skip if a task with the same title already exists (any entry)
+  const existing = await db.getFirstAsync<{ id: string }>(
+    `SELECT id FROM tasks WHERE lower(title) = lower(?) AND status = 'open'`,
+    title.trim(),
+  );
+  if (existing) return existing.id;
+
   const id = createId("task");
   await db.runAsync(
     `INSERT INTO tasks (id, entry_id, title, status, timeframe, created_at) VALUES (?, ?, ?, 'open', ?, ?)`,
     id,
     entryId,
-    title,
+    title.trim(),
     timeframe,
     formatLocalISOString(new Date()),
   );

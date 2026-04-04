@@ -229,7 +229,7 @@ export default function HomeScreen({
 
       if (aiReady) {
         void runPeopleBackfill();
-        void runTaskBackfill();
+        // Task extraction happens in entry/walk screens, not here
       }
 
       void loadOpenTasks();
@@ -511,7 +511,7 @@ export default function HomeScreen({
 
           {openTasks.length > 0 ? (
             <View style={styles.tasksList}>
-              {groupTasksByUrgency(openTasks).map((group) => (
+              {groupTasksByUrgency(openTasks.slice(0, 5)).map((group) => (
                 <View key={group.label} style={styles.taskGroup}>
                   <Text style={styles.tasksSectionTitle}>{group.label}</Text>
                   {group.tasks.map((task) => (
@@ -550,6 +550,16 @@ export default function HomeScreen({
                   ))}
                 </View>
               ))}
+              {openTasks.length > 5 ? (
+                <Pressable
+                  onPress={() => router.push("/tasks")}
+                  style={({ pressed }) => pressed ? { opacity: 0.5 } : undefined}
+                >
+                  <Text style={styles.seeAllTasks}>
+                    See all {openTasks.length} tasks
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : null}
 
@@ -1037,6 +1047,13 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
   taskButtonSkipText: {
     color: colors.muted,
     fontSize: 14,
+  },
+  seeAllTasks: {
+    color: colors.muted,
+    fontSize: 14,
+    fontStyle: "italic",
+    textAlign: "center",
+    paddingVertical: 8,
   },
   todaySummary: {
     marginHorizontal: 18,
