@@ -15,6 +15,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
 
+import { syncScheduledNotifications } from "../notifications/scheduler";
+import {
+  getRecordingPermissionStatus,
+  openAppSettings,
+} from "../settings/permissions";
 import { PaperRecordButton } from "../../components/notebook";
 import { formatDayKey, formatLongDay } from "../../lib/date";
 import {
@@ -140,6 +145,7 @@ export default function HomeScreen({
   const [observations, setObservations] = useState<ObservationCard[]>([]);
   const [openTasks, setOpenTasks] = useState<TaskRow[]>([]);
   const [todaySummaryBullets, setTodaySummaryBullets] = useState<string[]>([]);
+  const [micDenied, setMicDenied] = useState(false);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
   const hasCheckedUtcRef = useRef(false);
   const { colors } = useThemeColors();
@@ -185,6 +191,11 @@ export default function HomeScreen({
       if (stepSnapshot.permission === "granted") {
         void upsertDailySteps(db, makeDailyStepsRecord(stepSnapshot.totalSteps));
       }
+
+      void syncScheduledNotifications(nextEntries);
+      void getRecordingPermissionStatus().then((status) => {
+        setMicDenied(status === "denied");
+      });
 
       if (aiReady && todayEntries.length > 0) {
         void loadDailyHomeCards(todayEntries);
@@ -621,6 +632,17 @@ export default function HomeScreen({
 
         <View style={styles.bottomDock}>
           <View style={styles.bottomDockRule} />
+          {micDenied ? (
+            <Pressable
+              onPress={() => void openAppSettings()}
+              style={({ pressed }) => [styles.micBanner, pressed && { opacity: 0.7 }]}
+            >
+              <Text style={styles.micBannerTitle}>Microphone access needed</Text>
+              <Text style={styles.micBannerBody}>
+                Tap to open Settings and enable the mic so you can record walks.
+              </Text>
+            </Pressable>
+          ) : null}
           <PaperRecordButton label="Start Walk" onPress={() => router.push("/walk")} />
         </View>
       </View>
@@ -1187,6 +1209,26 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     height: StyleSheet.hairlineWidth,
     marginHorizontal: 18,
     backgroundColor: colors.rule,
+  },
+  micBanner: {
+    marginHorizontal: 18,
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    gap: 4,
+  },
+  micBannerTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  micBannerBody: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 18,
   },
 });
 }

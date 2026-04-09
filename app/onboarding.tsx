@@ -6,11 +6,12 @@ import * as SecureStore from "expo-secure-store";
 
 import { ensureRecordingPermissions } from "../src/modules/settings/permissions";
 import { requestHealthPermission } from "../src/modules/steps/health";
+import { requestNotificationPermission } from "../src/modules/notifications/scheduler";
 import { useTheme, useThemeColors } from "../src/theme";
 
 export const ONBOARDING_KEY = "walklogue-onboarding-complete";
 
-type Step = "welcome" | "mic" | "health" | "done";
+type Step = "welcome" | "mic" | "health" | "notifications" | "done";
 
 export default function OnboardingScreen() {
   const { colors } = useThemeColors();
@@ -37,6 +38,16 @@ export default function OnboardingScreen() {
     setBusy(true);
     try {
       await requestHealthPermission();
+    } finally {
+      setBusy(false);
+      setStep("notifications");
+    }
+  }, []);
+
+  const handleNotifications = useCallback(async () => {
+    setBusy(true);
+    try {
+      await requestNotificationPermission();
     } finally {
       setBusy(false);
       setStep("done");
@@ -78,7 +89,7 @@ export default function OnboardingScreen() {
 
         {step === "health" ? (
           <View style={styles.content}>
-            <Text style={styles.eyebrow}>STEP 2 OF 2</Text>
+            <Text style={styles.eyebrow}>STEP 2 OF 3</Text>
             <Text style={styles.title}>Apple Health</Text>
             <Text style={styles.body}>
               Connect Apple Health so each walk entry shows the steps you took
@@ -87,6 +98,21 @@ export default function OnboardingScreen() {
             <Text style={styles.bodySecondary}>
               WalkLogue only reads your step count. It never writes to Health.
               You can skip this and connect Fitbit later in Settings.
+            </Text>
+          </View>
+        ) : null}
+
+        {step === "notifications" ? (
+          <View style={styles.content}>
+            <Text style={styles.eyebrow}>STEP 3 OF 3</Text>
+            <Text style={styles.title}>Gentle reminders</Text>
+            <Text style={styles.body}>
+              A nudge once a day to take your walk and journal. Plus the
+              occasional throwback: "a year ago today you wrote..."
+            </Text>
+            <Text style={styles.bodySecondary}>
+              No spam. Quiet between 10pm and 8am. Always optional, change in
+              Settings.
             </Text>
           </View>
         ) : null}
@@ -136,8 +162,23 @@ export default function OnboardingScreen() {
               >
                 <Text style={styles.primaryText}>Connect Apple Health</Text>
               </Pressable>
-              <Pressable onPress={() => setStep("done")} style={styles.skip}>
+              <Pressable onPress={() => setStep("notifications")} style={styles.skip}>
                 <Text style={styles.skipText}>Skip for now</Text>
+              </Pressable>
+            </>
+          ) : null}
+
+          {step === "notifications" ? (
+            <>
+              <Pressable
+                onPress={handleNotifications}
+                disabled={busy}
+                style={({ pressed }) => [styles.primary, pressed && styles.pressed]}
+              >
+                <Text style={styles.primaryText}>Turn on reminders</Text>
+              </Pressable>
+              <Pressable onPress={() => setStep("done")} style={styles.skip}>
+                <Text style={styles.skipText}>Not now</Text>
               </Pressable>
             </>
           ) : null}

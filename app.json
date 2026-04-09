@@ -3,7 +3,7 @@
     "name": "WalkLogue",
     "slug": "WalkLog",
     "scheme": "walklog",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -53,7 +53,14 @@
         }
       ],
       "expo-secure-store",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#A77556"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
