@@ -54,14 +54,14 @@
       ],
       "expo-secure-store",
       "@react-native-community/datetimepicker",
+      "./plugins/with-no-aps.js",
       [
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
           "color": "#A77556"
         }
-      ],
-      "./plugins/with-no-aps.js"
+      ]
     ],
     "experiments": {
       "typedRoutes": true
