@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { success as hapticSuccess, warning as hapticWarning } from "../src/lib/haptics";
 
 import {
   completeTask,
@@ -85,6 +86,7 @@ export default function TasksScreen() {
                 <View style={styles.taskActions}>
                   <Pressable
                     onPress={async () => {
+                      hapticSuccess();
                       await completeTask(db, task.id);
                       void loadTasks();
                     }}
@@ -98,6 +100,7 @@ export default function TasksScreen() {
                   </Pressable>
                   <Pressable
                     onPress={async () => {
+                      hapticWarning();
                       await skipTask(db, task.id);
                       void loadTasks();
                     }}

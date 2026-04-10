@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef } from "react";
+import { warning as hapticWarning } from "../lib/haptics";
 import {
   Animated,
   PanResponder,
@@ -70,6 +71,7 @@ export function EntrySwipeRow({
   }, [animateTo, closeRow, onOpen, suppressPress]);
 
   const handleDeletePress = useCallback(() => {
+    hapticWarning();
     closeRow();
     onDelete();
   }, [closeRow, onDelete]);

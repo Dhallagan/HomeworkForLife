@@ -1,4 +1,5 @@
 import { PropsWithChildren, useMemo, type ReactNode } from "react";
+import { tapHeavy } from "../lib/haptics";
 import {
   Pressable,
   StyleSheet,
@@ -128,6 +129,7 @@ export function PaperRecordButton({
     <Pressable
       {...props}
       disabled={disabled}
+      onPressIn={() => { if (!disabled) tapHeavy(); }}
       style={({ pressed }) => [
         styles.recordButton,
         pressed && !disabled && styles.tabPressed,

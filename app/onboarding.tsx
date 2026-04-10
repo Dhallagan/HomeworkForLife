@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as SecureStore from "expo-secure-store";
 
+import { tapMedium } from "../src/lib/haptics";
 import { ensureRecordingPermissions } from "../src/modules/settings/permissions";
 import { requestHealthPermission } from "../src/modules/steps/health";
 import { requestNotificationPermission } from "../src/modules/notifications/scheduler";
@@ -131,7 +132,7 @@ export default function OnboardingScreen() {
         <View style={styles.footer}>
           {step === "welcome" ? (
             <Pressable
-              onPress={() => setStep("mic")}
+              onPress={() => { tapMedium(); setStep("mic"); }}
               style={({ pressed }) => [styles.primary, pressed && styles.pressed]}
             >
               <Text style={styles.primaryText}>Get started</Text>

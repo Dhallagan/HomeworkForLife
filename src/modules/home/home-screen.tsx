@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
 
 import { syncScheduledNotifications } from "../notifications/scheduler";
+import { success as hapticSuccess, warning as hapticWarning, tapLight } from "../../lib/haptics";
 import {
   getRecordingPermissionStatus,
   openAppSettings,
@@ -429,10 +430,12 @@ export default function HomeScreen({
   );
 
   const handleOpenProfile = useCallback(() => {
+    tapLight();
     router.push("/profile");
   }, [router]);
 
   const handleOpenSettings = useCallback(() => {
+    tapLight();
     router.push("/settings");
   }, [router]);
 
@@ -533,6 +536,7 @@ export default function HomeScreen({
                       <View style={styles.taskActions}>
                         <Pressable
                           onPress={async () => {
+                            hapticSuccess();
                             await completeTask(db, task.id);
                             void loadOpenTasks();
                           }}
@@ -546,6 +550,7 @@ export default function HomeScreen({
                         </Pressable>
                         <Pressable
                           onPress={async () => {
+                            hapticWarning();
                             await skipTask(db, task.id);
                             void loadOpenTasks();
                           }}
