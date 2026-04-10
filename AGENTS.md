@@ -31,7 +31,8 @@ Use Node `20.19.4` or newer within the Node 20 line for Expo SDK 54 compatibilit
 
 Local development may require these environment variables:
 
-- `EXPO_PUBLIC_OPENAI_API_KEY`
+- `EXPO_PUBLIC_API_URL`
+- `EXPO_PUBLIC_API_SECRET`
 - `EXPO_PUBLIC_FITBIT_CLIENT_ID`
 
 Never hardcode secrets. Do not commit `.env.local`.

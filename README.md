@@ -23,7 +23,7 @@ not a production-safe secret model.
 5. Run `npm run doctor`
 6. Generate native projects with `npm run prebuild`
 7. Run on iPhone or simulator with `npm run ios`
-8. Set `EXPO_PUBLIC_OPENAI_API_KEY` before running on a real device
+8. Set `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_API_SECRET` before running on a real device
 9. If you want Fitbit steps, set `EXPO_PUBLIC_FITBIT_CLIENT_ID` and register `walklog://fitbit` as the redirect URI in the Fitbit developer app
 
 ## Cloud agent groundwork
