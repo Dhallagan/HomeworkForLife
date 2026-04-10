@@ -18,6 +18,13 @@ import * as SecureStore from "expo-secure-store";
 import { syncScheduledNotifications } from "../notifications/scheduler";
 import { success as hapticSuccess, warning as hapticWarning, tapLight } from "../../lib/haptics";
 import {
+  loadBuddyState,
+  saveBuddyState,
+  computeBuddyState,
+  type BuddyState,
+} from "../buddy/state";
+import { BuddyView } from "../buddy/buddy-view";
+import {
   getRecordingPermissionStatus,
   openAppSettings,
 } from "../settings/permissions";
@@ -147,6 +154,7 @@ export default function HomeScreen({
   const [openTasks, setOpenTasks] = useState<TaskRow[]>([]);
   const [todaySummaryBullets, setTodaySummaryBullets] = useState<string[]>([]);
   const [micDenied, setMicDenied] = useState(false);
+  const [buddy, setBuddy] = useState<BuddyState | null>(null);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
   const hasCheckedUtcRef = useRef(false);
   const { colors } = useThemeColors();
@@ -196,6 +204,16 @@ export default function HomeScreen({
       void syncScheduledNotifications(nextEntries);
       void getRecordingPermissionStatus().then((status) => {
         setMicDenied(status === "denied");
+      });
+
+      // Update buddy if enabled
+      void loadBuddyState().then((prev) => {
+        if (!prev.enabled) { setBuddy(null); return; }
+        const journaledToday = todayEntries.length > 0;
+        const tasksToday = 0; // Updated below when tasks load
+        const next = computeBuddyState(prev, stepSnapshot.totalSteps, journaledToday, tasksToday);
+        void saveBuddyState(next);
+        setBuddy(next);
       });
 
       if (aiReady && todayEntries.length > 0) {
@@ -510,7 +528,9 @@ export default function HomeScreen({
             </View>
           </View>
 
-          {todaySummaryBullets.length > 0 ? (
+          {buddy ? (
+            <BuddyView buddy={buddy} />
+          ) : todaySummaryBullets.length > 0 ? (
             <View style={styles.todaySummaryWrap}>
               <Text style={styles.todaySummaryTitle}>{getSummaryTitle()}</Text>
               <View style={styles.todaySummaryCard}>

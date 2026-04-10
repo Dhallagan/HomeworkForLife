@@ -9,6 +9,14 @@ import { useSQLiteContext } from "expo-sqlite";
 import { Screen } from "../../components/ui";
 import { checkApiHealth, hasApiConfig } from "../../lib/api";
 import {
+  loadBuddyState,
+  saveBuddyState,
+  getDefaultState,
+  KIND_LABELS,
+  type BuddyKind,
+  type BuddyState,
+} from "../buddy/state";
+import {
   getNotificationPermissionStatus,
   requestNotificationPermission,
   type NotificationPermissionStatus,
@@ -87,6 +95,7 @@ export default function SettingsScreen() {
   const [isGeneratingTitles, setIsGeneratingTitles] = useState(false);
   const [apiHealth, setApiHealth] = useState<"checking" | "ok" | "down">("checking");
   const [notifStatus, setNotifStatus] = useState<NotificationPermissionStatus>("undetermined");
+  const [buddyState, setBuddyState] = useState<BuddyState | null>(null);
   const fitbitConfigured = isFitbitStepSourceConfigured();
 
   const loadPermissionState = useCallback(async () => {
@@ -128,6 +137,7 @@ export default function SettingsScreen() {
       setApiHealth("checking");
       void checkApiHealth().then((ok) => setApiHealth(ok ? "ok" : "down"));
       void getNotificationPermissionStatus().then(setNotifStatus);
+      void loadBuddyState().then(setBuddyState);
     }, [loadPermissionState]),
   );
 
@@ -363,6 +373,49 @@ export default function SettingsScreen() {
             }
             chevron={notifStatus !== "granted"}
           />
+        </View>
+      </View>
+
+      <View style={styles.group}>
+        <Text style={styles.groupHeader}>WalkBuddy</Text>
+        <View style={styles.groupCard}>
+          <SettingRow
+            label="Enable"
+            value={buddyState?.enabled ? "On" : "Off"}
+            onPress={async () => {
+              const prev = buddyState ?? getDefaultState();
+              const next = { ...prev, enabled: !prev.enabled };
+              await saveBuddyState(next);
+              setBuddyState(next);
+            }}
+          />
+          {buddyState?.enabled ? (
+            <>
+              <View style={styles.separator} />
+              <SettingRow
+                label="Companion"
+                value={KIND_LABELS[buddyState.kind]}
+                onPress={async () => {
+                  const kinds: BuddyKind[] = ["explorer", "oak", "plant"];
+                  const idx = kinds.indexOf(buddyState.kind);
+                  const next = { ...buddyState, kind: kinds[(idx + 1) % kinds.length] };
+                  await saveBuddyState(next);
+                  setBuddyState(next);
+                }}
+              />
+              <View style={styles.separator} />
+              <SettingRow
+                label="Reset"
+                value={`Day ${buddyState.streak}`}
+                onPress={async () => {
+                  const next = { ...getDefaultState(), enabled: true, kind: buddyState.kind };
+                  await saveBuddyState(next);
+                  setBuddyState(next);
+                }}
+                chevron
+              />
+            </>
+          ) : null}
         </View>
       </View>
 
