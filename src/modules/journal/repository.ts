@@ -219,6 +219,8 @@ export async function listEntries(db: SQLiteDatabase): Promise<EntryListItem[]> 
       journal_entries.title_emoji,
       journal_entries.body,
       journal_entries.session_id,
+      journal_entries.audio_uri,
+      journal_entries.transcription_status,
       walk_sessions.started_at,
       walk_sessions.ended_at,
       walk_sessions.duration_sec,
@@ -246,6 +248,8 @@ export async function getEntryById(
         journal_entries.title_emoji,
         journal_entries.body,
         journal_entries.session_id,
+        journal_entries.audio_uri,
+        journal_entries.transcription_status,
         walk_sessions.started_at,
         walk_sessions.ended_at,
         walk_sessions.duration_sec,
@@ -525,7 +529,7 @@ export async function getEntriesNeedingTaskExtraction(
   db: SQLiteDatabase,
 ): Promise<EntryListItem[]> {
   const rows = await db.getAllAsync<EntryRow>(
-    `SELECT je.id, je.created_at, je.source, je.title, je.title_emoji, je.body, je.session_id,
+    `SELECT je.id, je.created_at, je.source, je.title, je.title_emoji, je.body, je.session_id, je.audio_uri, je.transcription_status,
             ws.started_at, ws.ended_at, ws.duration_sec, ws.step_count
      FROM journal_entries je
      LEFT JOIN walk_sessions ws ON ws.entry_id = je.id
@@ -817,7 +821,7 @@ export async function getEntriesForPerson(
     `
     SELECT
       je.id, je.created_at, je.source, je.title, je.title_emoji,
-      je.body, je.session_id,
+      je.body, je.session_id, je.audio_uri, je.transcription_status,
       ws.started_at, ws.ended_at, ws.duration_sec, ws.step_count
     FROM people_entries pe
     JOIN journal_entries je ON je.id = pe.entry_id
@@ -922,7 +926,7 @@ export async function getEntriesNeedingPeopleExtraction(
   const rows = await db.getAllAsync<EntryRow>(`
     SELECT
       je.id, je.created_at, je.source, je.title, je.title_emoji,
-      je.body, je.session_id,
+      je.body, je.session_id, je.audio_uri, je.transcription_status,
       ws.started_at, ws.ended_at, ws.duration_sec, ws.step_count
     FROM journal_entries je
     LEFT JOIN walk_sessions ws ON ws.entry_id = je.id
