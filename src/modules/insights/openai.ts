@@ -641,7 +641,7 @@ export function backfillPeople(
   entries: EntryListItem[],
   getExistingPeople: () => Promise<{ id: string; name: string; aliases: string[] }[]>,
   onExtracted: (entryId: string, people: ExtractedPerson[]) => Promise<void>,
-  onAllDone: () => void,
+  onAllDone?: () => void,
 ) {
   if (!hasInsightsConfig()) return;
 
@@ -651,7 +651,7 @@ export function backfillPeople(
   );
 
   if (candidates.length === 0) {
-    onAllDone();
+    onAllDone?.();
     return;
   }
 
@@ -662,7 +662,7 @@ async function processPeopleBackfillQueue(
   entries: EntryListItem[],
   getExistingPeople: () => Promise<{ id: string; name: string; aliases: string[] }[]>,
   onExtracted: (entryId: string, people: ExtractedPerson[]) => Promise<void>,
-  onAllDone: () => void,
+  onAllDone?: () => void,
 ) {
   for (const entry of entries) {
     if (peopleBackfillInFlight.has(entry.id)) continue;
@@ -680,7 +680,7 @@ async function processPeopleBackfillQueue(
     }
   }
 
-  onAllDone();
+  onAllDone?.();
 }
 
 // ── Task extraction ────────────────────────────────────────

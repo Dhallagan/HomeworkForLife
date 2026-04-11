@@ -47,16 +47,12 @@ import {
 } from "../journal/repository";
 import {
   backfillMissingTitles,
-  backfillPeople,
   generateDailyHomeCards,
   hasInsightsConfig,
   peekCachedDailyHomeCards,
   type DailyHomeCards,
 } from "../insights/openai";
 import {
-  getEntriesNeedingPeopleExtraction,
-  getExistingPeopleContext,
-  linkPeopleToEntry,
   listEntries,
   updateEntryTitle,
   upsertDailySteps,
@@ -260,7 +256,6 @@ export default function HomeScreen({
       });
 
       if (aiReady) {
-        void runPeopleBackfill();
         // Task extraction happens in entry/walk screens, not here
       }
 
@@ -298,25 +293,6 @@ export default function HomeScreen({
       console.error("Failed to load daily home cards", error);
     }
   }, []);
-
-  const runPeopleBackfill = useCallback(async () => {
-    try {
-      const needsExtraction = await getEntriesNeedingPeopleExtraction(db);
-      if (needsExtraction.length === 0) return;
-
-      backfillPeople(
-        needsExtraction,
-        () => getExistingPeopleContext(db),
-        async (entryId, extracted) => {
-          if (extracted.length > 0) {
-            await linkPeopleToEntry(db, entryId, extracted);
-          }
-        },
-      );
-    } catch (error) {
-      console.error("People backfill failed", error);
-    }
-  }, [db]);
 
   const loadOpenTasks = useCallback(async () => {
     try {
