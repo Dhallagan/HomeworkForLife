@@ -129,7 +129,7 @@ export function useWalkCapture() {
 
       const abortController = new AbortController();
       transcriptionAbortRef.current = abortController;
-      const transcriptText = await transcribeAudioFile(audioUri, abortController.signal);
+      const transcriptText = await transcribeWithRetry(audioUri, abortController.signal, 3);
       const normalizedTranscript =
         transcriptText.trim() || "No speech was detected during this walk.";
 
@@ -253,6 +253,28 @@ async function setPlaybackAudioMode() {
   } catch {
     // Ignore mode reset failures during cleanup.
   }
+}
+
+async function transcribeWithRetry(
+  audioUri: string,
+  signal: AbortSignal,
+  maxAttempts: number,
+): Promise<string> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await transcribeAudioFile(audioUri, signal);
+    } catch (error) {
+      lastError = error;
+      if (signal.aborted) throw error;
+      // Don't retry 4xx errors (bad request, auth), only network/5xx
+      if (error instanceof Error && /\b4\d{2}\b/.test(error.message)) throw error;
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
+      }
+    }
+  }
+  throw lastError;
 }
 
 function calculateDurationSec(startedAt: Date, endedAt: Date) {
