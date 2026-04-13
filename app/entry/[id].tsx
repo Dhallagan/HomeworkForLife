@@ -394,37 +394,28 @@ export default function EntryDetailScreen() {
       {entry?.audioUri ? (
         <View style={styles.audioSection}>
           {entry.transcriptionStatus !== "completed" ? (
-            <View style={styles.transcriptionBanner}>
-              <View style={styles.bannerHeader}>
-                <Text style={styles.bannerIcon}>!</Text>
-                <Text style={styles.bannerTitle}>Transcription pending</Text>
-              </View>
-              <Text style={styles.bannerReason}>
-                {entry.transcriptionError || "Your recording is safe. Tap retry to transcribe it."}
-              </Text>
-              <Pressable
-                onPress={async () => {
-                  tapMedium();
-                  try {
-                    showToast("Retrying...", "info");
-                    const text = await transcribeAudioFile(entry.audioUri!);
-                    if (text.trim()) {
-                      await updateEntryTranscription(db, entry.id, text.trim());
-                      setBody(text.trim());
-                      showToast("Transcription complete!", "info");
-                      void loadEntry();
-                    } else {
-                      showToast("No speech detected in recording.");
-                    }
-                  } catch {
-                    showToast("Still failing. Try again later.");
+            <Pressable
+              onPress={async () => {
+                tapMedium();
+                try {
+                  showToast("Retrying...", "info");
+                  const text = await transcribeAudioFile(entry.audioUri!);
+                  if (text.trim()) {
+                    await updateEntryTranscription(db, entry.id, text.trim());
+                    setBody(text.trim());
+                    showToast("Transcription complete!", "info");
+                    void loadEntry();
+                  } else {
+                    showToast("No speech detected in recording.");
                   }
-                }}
-                style={({ pressed }) => [styles.retryButton, pressed && { opacity: 0.6 }]}
-              >
-                <Text style={styles.retryButtonText}>Retry Transcription</Text>
-              </Pressable>
-            </View>
+                } catch {
+                  showToast("Still failing. Try again later.");
+                }
+              }}
+              style={({ pressed }) => [styles.retryButton, pressed && { opacity: 0.6 }]}
+            >
+              <Text style={styles.retryButtonText}>Retry Transcription</Text>
+            </Pressable>
           ) : null}
           <AudioPlayer uri={entry.audioUri} />
         </View>
@@ -673,51 +664,18 @@ function createStyles(colors: ColorTokens) {
     marginBottom: 4,
     gap: 8,
   },
-  transcriptionBanner: {
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#C2654A",
-    gap: 8,
-  },
-  bannerHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  bannerIcon: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: "#C2654A",
-    color: "#FFF",
-    fontSize: 14,
-    fontWeight: "700",
-    textAlign: "center",
-    lineHeight: 22,
-    overflow: "hidden",
-  },
-  bannerTitle: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  bannerReason: {
-    color: colors.muted,
-    fontSize: 13,
-    lineHeight: 18,
-  },
   retryButton: {
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     alignItems: "center",
   },
   retryButtonText: {
-    color: "#FFF8F2",
+    color: colors.text,
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "500",
   },
 });
 }
