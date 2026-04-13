@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Constants from "expo-constants";
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
-// Audio saving disabled until expo-file-system stabilizes
+import * as FileSystem from "expo-file-system/legacy";
 
 import { transcribeAudioFile } from "../transcription/openai";
 
@@ -130,12 +130,30 @@ export function useWalkCapture() {
         throw new Error("Recorded audio file was not available.");
       }
 
-      // Save audio to permanent storage before attempting transcription
+      // Save audio to permanent storage BEFORE attempting transcription.
+      // This is the "never lose a walk" guarantee. Even if transcription
+      // fails, the recording survives.
+      let permanentPath: string | undefined;
+      try {
+        const ext = audioUri.slice(audioUri.lastIndexOf(".")) || ".m4a";
+        const permanentDir = `${FileSystem.documentDirectory}recordings/`;
+        permanentPath = `${permanentDir}${Date.now()}${ext}`;
+        const dirInfo = await FileSystem.getInfoAsync(permanentDir);
+        if (!dirInfo.exists) {
+          await FileSystem.makeDirectoryAsync(permanentDir, { intermediates: true });
+        }
+        await FileSystem.copyAsync({ from: audioUri, to: permanentPath });
+      } catch {
+        // If permanent save fails, fall back to temp URI.
+        // Transcription can still work, audio just won't survive app restart.
+        permanentPath = audioUri;
+      }
+
       const abortController = new AbortController();
       transcriptionAbortRef.current = abortController;
 
       try {
-        const transcriptText = await transcribeWithRetry(audioUri, abortController.signal, 3);
+        const transcriptText = await transcribeWithRetry(permanentPath, abortController.signal, 3);
         const normalizedTranscript =
           transcriptText.trim() || "No speech was detected during this walk.";
 
@@ -146,6 +164,7 @@ export function useWalkCapture() {
           startedAt: sessionStart,
           endedAt,
           durationSec: calculateDurationSec(sessionStart, endedAt),
+          audioUri: permanentPath,
         };
       } catch (transcriptionError) {
         const reason = classifyTranscriptionError(transcriptionError);
@@ -154,6 +173,7 @@ export function useWalkCapture() {
           startedAt: sessionStart,
           endedAt,
           durationSec: calculateDurationSec(sessionStart, endedAt),
+          audioUri: permanentPath,
           transcriptionError: reason,
         };
       }
