@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import Constants from "expo-constants";
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
-import * as FileSystem from "expo-file-system/legacy";
+let FileSystem: any = null;
+try {
+  FileSystem = require("expo-file-system/legacy");
+} catch {
+  try { FileSystem = require("expo-file-system"); } catch {}
+}
 
 import { transcribeAudioFile } from "../transcription/openai";
 
@@ -134,18 +139,20 @@ export function useWalkCapture() {
       // This is the "never lose a walk" guarantee. Even if transcription
       // fails, the recording survives.
       let permanentPath: string | undefined;
-      try {
-        const ext = audioUri.slice(audioUri.lastIndexOf(".")) || ".m4a";
-        const permanentDir = `${FileSystem.documentDirectory}recordings/`;
-        permanentPath = `${permanentDir}${Date.now()}${ext}`;
-        const dirInfo = await FileSystem.getInfoAsync(permanentDir);
-        if (!dirInfo.exists) {
-          await FileSystem.makeDirectoryAsync(permanentDir, { intermediates: true });
+      if (FileSystem?.documentDirectory) {
+        try {
+          const ext = audioUri.slice(audioUri.lastIndexOf(".")) || ".m4a";
+          const permanentDir = `${FileSystem.documentDirectory}recordings/`;
+          permanentPath = `${permanentDir}${Date.now()}${ext}`;
+          const dirInfo = await FileSystem.getInfoAsync(permanentDir);
+          if (!dirInfo.exists) {
+            await FileSystem.makeDirectoryAsync(permanentDir, { intermediates: true });
+          }
+          await FileSystem.copyAsync({ from: audioUri, to: permanentPath });
+        } catch {
+          permanentPath = audioUri;
         }
-        await FileSystem.copyAsync({ from: audioUri, to: permanentPath });
-      } catch {
-        // If permanent save fails, fall back to temp URI.
-        // Transcription can still work, audio just won't survive app restart.
+      } else {
         permanentPath = audioUri;
       }
 
