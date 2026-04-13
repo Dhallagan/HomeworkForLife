@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Audio, type AVPlaybackStatus } from "expo-av";
+import * as FileSystem from "expo-file-system/legacy";
 
 import { useTheme, useThemeColors } from "../theme";
 import { tapMedium } from "../lib/haptics";
@@ -34,9 +35,17 @@ export function AudioPlayer({ uri }: Props) {
     }
   }, []);
 
+  const [fileExists, setFileExists] = useState(true);
+
   const loadSound = useCallback(async () => {
     if (soundRef.current) return;
     try {
+      // Check if file exists before loading
+      const info = await FileSystem.getInfoAsync(uri);
+      if (!info.exists) {
+        setFileExists(false);
+        return;
+      }
       const { sound } = await Audio.Sound.createAsync(
         { uri },
         { shouldPlay: false },
@@ -45,7 +54,7 @@ export function AudioPlayer({ uri }: Props) {
       );
       soundRef.current = sound;
     } catch {
-      // Will show as not loaded
+      setFileExists(false);
     }
   }, [uri, onStatus]);
 
@@ -77,6 +86,8 @@ export function AudioPlayer({ uri }: Props) {
     const target = Math.round(ratio * duration);
     await sound.setPositionAsync(target);
   }, [duration]);
+
+  if (!fileExists) return null;
 
   return (
     <View style={styles.container}>

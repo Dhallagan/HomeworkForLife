@@ -110,7 +110,6 @@ export const darkTheme: Theme = {
 // Static exports for files that haven't migrated to the context yet.
 // These always return the light palette.
 export const colors = lightColors;
-export const statusColors = lightStatusColors;
 
 export const spacing = {
   xxs: 6,

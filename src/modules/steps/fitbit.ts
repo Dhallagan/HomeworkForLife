@@ -184,7 +184,7 @@ export async function getFitbitStepCountForWindow(startedAt: Date, endedAt: Date
     };
   }
 
-  console.log("Fitbit step sync session", describeSession(session));
+  if (__DEV__) console.log("Fitbit step sync session", describeSession(session));
 
   try {
     const total = await getFitbitStepCountForDateWithToken(
@@ -198,7 +198,7 @@ export async function getFitbitStepCountForWindow(startedAt: Date, endedAt: Date
     };
   } catch (error) {
     if (isInvalidTokenError(error)) {
-      console.log("Fitbit step sync hit invalid_token, retrying with refresh", {
+      if (__DEV__) console.log("Fitbit step sync hit invalid_token, retrying with refresh", {
         startedAt: startedAt.toISOString(),
         endedAt: endedAt.toISOString(),
       });
@@ -260,7 +260,7 @@ async function getFitbitStepCountForDate(date: Date) {
     };
   }
 
-  console.log("Fitbit day step sync session", describeSession(session));
+  if (__DEV__) console.log("Fitbit day step sync session", describeSession(session));
 
   try {
     const total = await getFitbitStepCountForDateWithToken(session.accessToken, date);
@@ -271,7 +271,7 @@ async function getFitbitStepCountForDate(date: Date) {
     };
   } catch (error) {
     if (isInvalidTokenError(error)) {
-      console.log("Fitbit day step sync hit invalid_token, retrying with refresh", {
+      if (__DEV__) console.log("Fitbit day step sync hit invalid_token, retrying with refresh", {
         date: date.toISOString(),
       });
 
@@ -349,7 +349,7 @@ async function getValidSession() {
     tokenType: session.tokenType,
   });
 
-  console.log("Fitbit stored session", {
+  if (__DEV__) console.log("Fitbit stored session", {
     ...describeSession(session),
     shouldRefresh: tokenResponse.shouldRefresh(),
   });
@@ -377,7 +377,7 @@ async function refreshSession(existingSession?: FitbitSession | null) {
   }
 
   try {
-    console.log("Fitbit refreshing session", describeSession(session));
+    if (__DEV__) console.log("Fitbit refreshing session", describeSession(session));
 
     const refreshed = await refreshAsync(
       {
@@ -397,7 +397,7 @@ async function refreshSession(existingSession?: FitbitSession | null) {
       tokenType: refreshed.tokenType ?? session.tokenType,
     };
 
-    console.log("Fitbit refreshed session", describeSession(nextSession));
+    if (__DEV__) console.log("Fitbit refreshed session", describeSession(nextSession));
     await writeSession(nextSession);
     return nextSession;
   } catch (error) {
@@ -541,7 +541,7 @@ function logRawTokens(
     return;
   }
 
-  console.log(label, {
+  if (__DEV__) console.log(label, {
     accessToken: session.accessToken ?? null,
     refreshToken: session.refreshToken ?? null,
   });
