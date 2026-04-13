@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Constants from "expo-constants";
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
-import { File, Paths } from "expo-file-system";
+// Audio saving disabled until expo-file-system stabilizes
 
 import { transcribeAudioFile } from "../transcription/openai";
 
@@ -131,25 +131,11 @@ export function useWalkCapture() {
       }
 
       // Save audio to permanent storage before attempting transcription
-      let permanentPath: string | undefined;
-      try {
-        const ext = audioUri.slice(audioUri.lastIndexOf(".")) || ".m4a";
-        const recordingsDir = new File(Paths.document, "recordings");
-        try { recordingsDir.create({ intermediates: true }); } catch {}
-        const destFile = new File(recordingsDir, `${Date.now()}${ext}`);
-        const srcFile = new File(audioUri);
-        await srcFile.copy(destFile);
-        permanentPath = destFile.uri;
-      } catch (copyError) {
-        if (__DEV__) console.error("Failed to save audio permanently", copyError);
-        permanentPath = audioUri;
-      }
-
       const abortController = new AbortController();
       transcriptionAbortRef.current = abortController;
 
       try {
-        const transcriptText = await transcribeWithRetry(permanentPath, abortController.signal, 3);
+        const transcriptText = await transcribeWithRetry(audioUri, abortController.signal, 3);
         const normalizedTranscript =
           transcriptText.trim() || "No speech was detected during this walk.";
 
@@ -160,18 +146,14 @@ export function useWalkCapture() {
           startedAt: sessionStart,
           endedAt,
           durationSec: calculateDurationSec(sessionStart, endedAt),
-          audioUri: permanentPath,
         };
       } catch (transcriptionError) {
-        // Transcription failed but audio is saved. Return empty transcript
-        // so the entry can still be created with the audio attached.
         const reason = classifyTranscriptionError(transcriptionError);
         return {
           transcript: "",
           startedAt: sessionStart,
           endedAt,
           durationSec: calculateDurationSec(sessionStart, endedAt),
-          audioUri: permanentPath,
           transcriptionError: reason,
         };
       }
