@@ -197,10 +197,30 @@ export default function WalkScreen() {
       }
 
       console.error("Could not save walk entry", error);
-      const message =
-        error instanceof Error ? error.message : "Try again from the home screen.";
 
-      Alert.alert("Could not save walk", message);
+      // Last resort: try to create entry with whatever we have
+      try {
+        const entry = await createWalkEntry(db, {
+          body: "",
+          startedAt: new Date(),
+          endedAt: new Date(),
+          durationSec: elapsedSeconds || 1,
+          stepCount: 0,
+          transcriptionStatus: "failed",
+        });
+        if (entry) {
+          router.replace(`/entry/${entry.id}`);
+          return;
+        }
+      } catch {
+        // Even the fallback failed
+      }
+
+      Alert.alert(
+        "Walk saved with errors",
+        "Something went wrong, but your recording may still be available. Check your latest entry.",
+      );
+      router.replace("/");
     }
   }
 

@@ -130,14 +130,21 @@ export function useWalkCapture() {
       }
 
       // Save audio to permanent storage before attempting transcription
-      const ext = audioUri.slice(audioUri.lastIndexOf(".")) || ".m4a";
-      const permanentDir = `${FileSystem.documentDirectory}recordings/`;
-      const permanentPath = `${permanentDir}${Date.now()}${ext}`;
-      const dirInfo = await FileSystem.getInfoAsync(permanentDir);
-      if (!dirInfo.exists) {
-        await FileSystem.makeDirectoryAsync(permanentDir, { intermediates: true });
+      let permanentPath: string | undefined;
+      try {
+        const ext = audioUri.slice(audioUri.lastIndexOf(".")) || ".m4a";
+        const permanentDir = `${FileSystem.documentDirectory}recordings/`;
+        permanentPath = `${permanentDir}${Date.now()}${ext}`;
+        const dirInfo = await FileSystem.getInfoAsync(permanentDir);
+        if (!dirInfo.exists) {
+          await FileSystem.makeDirectoryAsync(permanentDir, { intermediates: true });
+        }
+        await FileSystem.copyAsync({ from: audioUri, to: permanentPath });
+      } catch (copyError) {
+        console.error("Failed to save audio permanently", copyError);
+        // Fall back to the temp URI for transcription
+        permanentPath = audioUri;
       }
-      await FileSystem.copyAsync({ from: audioUri, to: permanentPath });
 
       const abortController = new AbortController();
       transcriptionAbortRef.current = abortController;
