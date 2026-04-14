@@ -94,35 +94,12 @@ export default function WalkScreen() {
   const leadingBars = bars.slice(0, 3);
   const trailingBars = bars.slice(3);
 
-  const [transcribePhase, setTranscribePhase] = useState(0);
-
-  useEffect(() => {
-    if (!isTranscribing) { setTranscribePhase(0); return; }
-    const phases = [0, 1, 2];
-    let i = 0;
-    const interval = setInterval(() => {
-      i = (i + 1) % phases.length;
-      setTranscribePhase(phases[i]);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [isTranscribing]);
-
   const recorderStatusText = useMemo(() => {
-    if (isTranscribing) {
-      const messages = [
-        "Saving your recording...",
-        "Transcribing your walk...",
-        "Almost there...",
-      ];
-      return messages[transcribePhase] ?? messages[0];
-    }
-
     if (isSimulatorRecordingFallback) {
       return "Simulator mode. Use a physical device to record.";
     }
-
     return "Recording. Lock your screen and keep talking.";
-  }, [isSimulatorRecordingFallback, isTranscribing, transcribePhase, stepPermission, stepSource]);
+  }, [isSimulatorRecordingFallback, stepPermission, stepSource]);
 
   async function handleFinish() {
     if (isTranscribing) {
@@ -382,27 +359,25 @@ export default function WalkScreen() {
         </View>
 
         <PaperSheet style={styles.sheet} contentStyle={styles.sheetContent} lineCount={11}>
-          <Text style={styles.sheetStatus}>{recorderStatusText}</Text>
-
-          <Text style={[styles.transcriptText, !transcript && styles.transcriptPlaceholder]}>
-            {transcript ||
-              errorMessage ||
-              "Your words will appear here after you end the walk."}
-          </Text>
+          {isTranscribing ? (
+            <TypewriterText />
+          ) : (
+            <>
+              <Text style={styles.sheetStatus}>{recorderStatusText}</Text>
+              <Text style={[styles.transcriptText, !transcript && styles.transcriptPlaceholder]}>
+                {transcript ||
+                  errorMessage ||
+                  "Your words will appear here after you end the walk."}
+              </Text>
+            </>
+          )}
         </PaperSheet>
 
         <View style={styles.bottomAction}>
           {isTranscribing ? (
-            <View style={styles.transcribingState}>
-              <View style={styles.transcribingDots}>
-                <View style={[styles.dot, transcribePhase >= 0 && styles.dotActive]} />
-                <View style={[styles.dot, transcribePhase >= 1 && styles.dotActive]} />
-                <View style={[styles.dot, transcribePhase >= 2 && styles.dotActive]} />
-              </View>
-              <Pressable onPress={handleCancelTranscription}>
-                <Text style={styles.cancelLink}>Cancel</Text>
-              </Pressable>
-            </View>
+            <Pressable onPress={handleCancelTranscription}>
+              <Text style={styles.cancelLink}>Cancel</Text>
+            </Pressable>
           ) : (
             <PaperRecordButton
               label="End Walk"
@@ -446,6 +421,66 @@ function isAbortError(error: unknown) {
 }
 
 type ColorTokens = ReturnType<typeof useTheme>["colors"];
+
+const TYPEWRITER_MESSAGES = [
+  "Saving your recording",
+  "Transcribing your walk",
+  "Reading between the lines",
+  "Turning voice into words",
+  "Almost there",
+];
+
+function TypewriterText() {
+  const { colors } = useThemeColors();
+  const [msgIndex, setMsgIndex] = useState(0);
+  const [charIndex, setCharIndex] = useState(0);
+  const [deleting, setDeleting] = useState(false);
+  const [cursorVisible, setCursorVisible] = useState(true);
+
+  const msg = TYPEWRITER_MESSAGES[msgIndex % TYPEWRITER_MESSAGES.length];
+
+  useEffect(() => {
+    const blink = setInterval(() => setCursorVisible((v) => !v), 530);
+    return () => clearInterval(blink);
+  }, []);
+
+  useEffect(() => {
+    if (deleting) {
+      if (charIndex === 0) {
+        setDeleting(false);
+        setMsgIndex((i) => (i + 1) % TYPEWRITER_MESSAGES.length);
+        return;
+      }
+      const timer = setTimeout(() => setCharIndex((i) => i - 1), 30);
+      return () => clearTimeout(timer);
+    }
+
+    if (charIndex < msg.length) {
+      const timer = setTimeout(() => setCharIndex((i) => i + 1), 60);
+      return () => clearTimeout(timer);
+    }
+
+    // Pause at full message, then start deleting
+    const timer = setTimeout(() => setDeleting(true), 2000);
+    return () => clearTimeout(timer);
+  }, [charIndex, deleting, msg]);
+
+  return (
+    <Text
+      style={{
+        fontFamily: "Courier",
+        fontSize: 14,
+        color: colors.muted,
+        letterSpacing: 0.5,
+        lineHeight: 22,
+        paddingTop: 4,
+      }}
+    >
+      {msg.slice(0, charIndex)}
+      <Text style={{ opacity: cursorVisible ? 1 : 0 }}>▊</Text>
+    </Text>
+  );
+}
 
 function createStyles(colors: ColorTokens) {
   return StyleSheet.create({
@@ -585,28 +620,10 @@ function createStyles(colors: ColorTokens) {
     backgroundColor: colors.accent,
     opacity: 0.82,
   },
-  transcribingState: {
-    alignItems: "center",
-    gap: 16,
-    paddingVertical: 20,
-  },
-  transcribingDots: {
-    flexDirection: "row",
-    gap: 8,
-    alignItems: "center",
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.border,
-  },
-  dotActive: {
-    backgroundColor: colors.accent,
-  },
   cancelLink: {
     color: colors.muted,
     fontSize: 14,
+    paddingVertical: 20,
   },
 });
 }
