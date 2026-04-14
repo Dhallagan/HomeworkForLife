@@ -3,8 +3,8 @@ import * as SecureStore from "expo-secure-store";
 let Notifications: typeof import("expo-notifications") | null = null;
 try {
   Notifications = require("expo-notifications");
-} catch {
-  // Native module not available (Expo Go or missing native rebuild)
+} catch (e) {
+  if (__DEV__) console.log("expo-notifications not available:", e);
 }
 
 import type { EntryListItem } from "../journal/repository";
@@ -116,9 +116,10 @@ export async function syncScheduledNotifications(entries: EntryListItem[]) {
   const streak = computeStreak(completedEntries);
   const { hour, minute } = await getNotificationTime();
 
-  if (!journaledToday && !inQuietHours(hour)) {
-    await scheduleDaily(hour, minute);
-  }
+  // Always schedule the repeating daily nudge. It fires every day at the
+  // chosen time. When the user opens the app and has already journaled,
+  // we cancel and reschedule (so today's is skipped but tomorrow's fires).
+  await scheduleDaily(hour, minute);
 
   if (streak >= 3 && !journaledToday) {
     await scheduleStreakSave(streak);
